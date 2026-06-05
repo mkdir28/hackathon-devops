@@ -1,0 +1,50 @@
+import type { LlmProviderId } from './ai/types.js';
+
+const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '';
+const geminiKey = process.env.GEMINI_API_KEY || '';
+const openaiKey = process.env.OPENAI_API_KEY || '';
+
+function detectProvider(): LlmProviderId | null {
+  const forced = (process.env.LLM_PROVIDER || 'auto').toLowerCase();
+  if (forced === 'demo') return null;
+  if (forced === 'openai' && openaiKey) return 'openai';
+  if (forced === 'gemini' && geminiKey) return 'gemini';
+  if (forced === 'claude' && anthropicKey) return 'claude';
+  if (forced !== 'auto') {
+    console.warn(`[config] LLM_PROVIDER=${forced} but matching API key is missing`);
+    return null;
+  }
+  if (anthropicKey) return 'claude';
+  if (geminiKey) return 'gemini';
+  if (openaiKey) return 'openai';
+  return null;
+}
+
+const detectedProvider = detectProvider();
+const hasLlmApiKey = Boolean(anthropicKey || geminiKey || openaiKey);
+const llmProviderForcedDemo = (process.env.LLM_PROVIDER || '').toLowerCase() === 'demo';
+/** Demo only when no LLM API key is set (or LLM_PROVIDER=demo). */
+const demoMode = llmProviderForcedDemo || !hasLlmApiKey;
+
+export const config = {
+  port: Number(process.env.PORT || 3001),
+  publicUrl: process.env.PUBLIC_URL || 'http://localhost:5173',
+  uploadDir: process.env.UPLOAD_DIR || './uploads',
+
+  llmProvider: (demoMode ? 'demo' : detectedProvider) as LlmProviderId,
+  demoMode,
+  hasLlmApiKey,
+
+  openaiApiKey: openaiKey,
+  openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+
+  geminiApiKey: geminiKey,
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
+
+  anthropicApiKey: anthropicKey,
+  claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+
+  jobSearchConcurrency: Number(process.env.JOB_SEARCH_CONCURRENCY || 4),
+  jobSearchResultsPerBoard: Number(process.env.JOB_SEARCH_RESULTS_PER_BOARD || 8),
+  jobSearchFetchTimeoutMs: Number(process.env.JOB_SEARCH_FETCH_TIMEOUT_MS || 15000),
+} as const;

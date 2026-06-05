@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/components/ui/accordion.tsx",
+    "src/components/ui/badge.tsx",
+    "src/components/ui/calendar.tsx",
+    "src/components/ui/carousel.tsx",
+    "src/components/ui/chart.tsx",
+    "src/components/ui/context-menu.tsx",
+    "src/components/ui/dropdown-menu.tsx",
+    "src/components/ui/form.tsx",
+    "src/components/ui/menubar.tsx",
+    "src/components/ui/pagination.tsx",
+    "src/components/ui/radio-group.tsx",
+    "src/components/ui/resizable.tsx",
+    "src/components/ui/sidebar.tsx",
+    "src/components/ui/sonner.tsx",
+    "src/components/ui/tabs.tsx",
+    "src/components/ui/toggle-group.tsx"
+  ]
+}
