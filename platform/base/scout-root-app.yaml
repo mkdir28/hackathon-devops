@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: scout-root-platform
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Command repo URL
+    repoURL: 'https://github.com/mkdir28/hackathon-devops.git'
+    # Listen develop branch, where features will appear
+    targetRevision: develop
+    # Folder with manifests for dev env
+    path: platform/environments/dev
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: scout-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
