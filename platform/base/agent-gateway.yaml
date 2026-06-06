@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: gateway
-          image: ghcr.io/mkdir28/agent-gateway:v1.0.0 
+          image: ghcr.io/berriai/litellm:main-v1.35.20 
           ports:
             - containerPort: 8080
           env:
