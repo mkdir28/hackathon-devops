@@ -5,3 +5,4 @@ resources:
   - agent-gateway.yaml
   - flux-system.yaml
   - agent-skills-sync.yaml
+  - app-components.yaml
