@@ -20,5 +20,5 @@ spec:
   sourceRef:
     kind: GitRepository
     name: agent-skills-source
-  path: "./app" # Вказуємо на папку, де лежить логіка агента та його SKILL.md
+  path: "./app/agent-config" # folder for agent-skills config files 
   prune: true
