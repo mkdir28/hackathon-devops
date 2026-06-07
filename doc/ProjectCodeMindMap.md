@@ -102,6 +102,155 @@ graph TD
 
 ---
 
+## Architecture & Code Flow
+
+The diagram below is a plain-text rendering of the Mermaid graph above, provided for
+environments where Mermaid is not rendered (raw viewers, terminals, code review tools).
+It traces a request from the React client, through the Express API, into the agentic
+AI core, and out to external resources.
+
+```text
+                                  JobMatch - End-to-End Code Flow
+                                  ===============================
+
+[FRONTEND: React + Vite Client]
+   [Home.tsx]  (orchestrates: SearchForm.tsx | CVDropzone.tsx | ResultsList.tsx | ThemeContext.tsx)
+      |
+      |-- Upload file ------------------------------> [Backend: routes/files.ts]
+      |                                                   |
+      |                                                   |-- Parses PDF/Text -----------> [services/cv.ts]
+      |                                                   |-- LLM Structured CV Output --> [services/llm.ts]
+      |
+      |-- Extract CV data / Match jobs -------------> [Backend: routes/jobs.ts]
+                                                          |
+                                                          |-- Initiate Agentic Match ---> [services/llm.ts]
+
+
+[BACKEND: Express.js API Server]
+   [index.ts] (CORS, body limits, health, mounts /api/files /api/cv /api/jobs) + [config.ts]
+
+   [services/llm.ts]
+      |-- Task: cv_extract -------------------------> [ai/AIClient.ts]
+      |-- Task: job_match --------------------------> [agent/JobSearchAgent.ts]
+
+
+[AGENT: agent/JobSearchAgent.ts]
+      |
+      |-- 1. Filter & Select Boards ---------------> [agent/boards.ts]
+      |                                                   |
+      |                                                   '-- Loads database --> [(server/data/job-boards.json)]
+      |
+      |-- 2. Concurrent Tool Queries --------------> [agent/tools/fetch-board.ts]
+      |                                                   |
+      |                                                   '-- Cheerio Parse HTML --> [agent/tools/parsers.ts]
+      |
+      |-- 2. Fallback Web Search ------------------> [agent/tools/web-search.ts]
+      |                                                   |
+      |                                                   '-- Google / OpenAI / Claude Search APIs (loops back)
+      |
+      |-- 3. Rank & Score Results -----------------> [agent/synthesize.ts]
+                                                          |
+                                                          |-- Injects Agent Skills ----> [(skills/)]
+                                                          '-- Mime-Type JSON Structure -> [ai/AIClient.ts]
+
+
+[AI CORE: ai/AIClient.ts]  (singleton provider factory)
+      |
+      '-- Invokes provider API --> [providers/gemini.ts] | [providers/openai.ts] | [providers/claude.ts] | [providers/demo.ts]
+                                          |
+                                          '-- Send prompt + schema --> [(LLM Providers API)]
+
+
+[EXTERNAL RESOURCES & FILES]
+   [(server/data/job-boards.json)]  -- job-board registry consumed by agent/boards.ts
+   [(skills/)]                      -- markdown "Agent Skills" injected into system prompts
+   [(LLM Providers API)]            -- Gemini / OpenAI / Claude live endpoints
+```
+
+Legend:
+
+```text
+[Component]   = a code module, route, or service
+[(Resource)]  = an external file, datastore, or third-party API
+-->           = directional data / control flow
+|-->          = a branch originating from the component on the line above
+'--           = the last branch of a group
+```
+
+---
+
+## Project Structure
+
+The repository is split into the **application** (`app/`) and the **platform / GitOps**
+deployment assets that make it a DevOps/SRE sandbox. The tree below highlights the
+directories referenced by the architecture flow above.
+
+```text
+hackathon-devops/
+|-- app/                         # JobMatch application (frontend + backend)
+|   |-- src/                     # React + Vite client
+|   |   |-- pages/Home.tsx       # Central page controller / state owner
+|   |   |-- components/
+|   |   |   |-- job-search/      # SearchForm, CVDropzone, ResultsList, JobCard, ...
+|   |   |   '-- ui/              # Reusable design-system primitives
+|   |   |-- lib/                 # ThemeContext, i18n, countries, query-client, ...
+|   |   |-- api/                 # apiClient / httpClient / integrations
+|   |   '-- hooks/               # useSavedJobs, use-mobile, ...
+|   |
+|   |-- server/                  # Express.js + TypeScript API
+|   |   |-- index.ts             # App bootstrap, CORS, health, route mounting
+|   |   |-- config.ts            # Runtime configuration
+|   |   |-- routes/              # files.ts (uploads/CV), jobs.ts (agentic match)
+|   |   |-- services/            # cv.ts (text extraction), llm.ts (orchestration)
+|   |   |-- agent/               # JobSearchAgent, boards, synthesize
+|   |   |   '-- tools/           # fetch-board, web-search, parsers, http
+|   |   |-- ai/                  # AIClient + providers (gemini/openai/claude/demo)
+|   |   |   '-- skills/loader.ts # Loads markdown Agent Skills into prompts
+|   |   '-- data/                # job-boards.json registry
+|   |
+|   |-- skills/                  # Agent Skills (markdown instruction sets)
+|   |-- prompts/                 # Role + template prompt library
+|   |-- Dockerfile               # Frontend image
+|   |-- Dockerfile.api           # Backend API image
+|   |-- docker-compose.yml       # Local multi-container orchestration
+|   '-- docker/nginx.conf.template
+|
+|-- platform/                    # Kubernetes / GitOps deployment assets
+|   |-- base/                    # Kustomize base, ArgoCD/Flux manifests, k3d config
+|   '-- environments/dev/        # Per-environment Kustomize overlays
+|
+|-- doc/                         # Architecture documentation (this file, HLD, ADR)
+|-- ADR/                         # Architecture Decision Records
+|-- evals/                       # Evaluation harness
+'-- README.md
+```
+
+### Layered View
+
+```text
+[Presentation Layer]  src/            React UI, theming, i18n, API clients
+        |
+        v
+[API Layer]           server/routes/  HTTP endpoints (files, cv, jobs)
+        |
+        v
+[Service Layer]       server/services/ CV extraction + LLM orchestration
+        |
+        v
+[Agent Layer]         server/agent/   Board selection, scraping, scoring/synthesis
+        |
+        v
+[AI Provider Layer]   server/ai/      Provider abstraction + Agent Skills injection
+        |
+        v
+[External Layer]      job-boards.json, skills/, LLM Provider APIs
+
+[Platform Layer]      platform/       Docker + Kubernetes (k3d) + GitOps (ArgoCD/Flux)
+                                      wraps all of the above for DevOps/SRE workflows
+```
+
+---
+
 ## Detailed Components Directory
 
 ### 1. Frontend (React / Vite / CSS)
