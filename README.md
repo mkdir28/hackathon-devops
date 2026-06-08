@@ -98,3 +98,5 @@ node run-evals.mjs
 * 📑 **[Architectural Decision Records (ADR)](doc/ADR.md)** — Чому саме так побудована система, FinOps аналіз та розрахунки Unit-економіки.
 * 📐 **[High-Level Solution Design (HLD)](doc/HLD.md)** — Схеми архітектури, життєвого циклу Агента та діаграми розгортання в Kubernetes.
 * 🔄 **[CI/CD & GitOps Guide](doc/cicd.md)** — Детальний опис налаштування FluxCD, тегування образів та автоматичного оновлення релізів.
+* 🏗️ **[Deployment Infrastructure Guide](doc/deployment_infrastructure.md)** — Стратегія розгортання для всіх середовищ (Dev, Staging, Prod), мережева топологія та забезпечення високої доступності.
+* 🗺️ **[Architecture Implementation Roadmap](doc/roadmap.md)** — Роадмап реалізації цільової архітектури, аналіз розбіжностей MVP та кроки впровадження БД/кешування.
