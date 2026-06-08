@@ -26,13 +26,13 @@ spec:
       replicaCount: 1
       image:
         tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-web-dev"}
-    redis:
-      enabled: true
-      architecture: standalone
-      master:
-        persistence:
-          enabled: false
-    qdrant:
-      enabled: true
-      persistence:
-        enabled: false
+#    redis:
+#      enabled: true
+#      architecture: standalone
+#      master:
+#        persistence:
+#          enabled: false
+#    qdrant:
+#      enabled: true
+#      persistence:
+#        enabled: false
