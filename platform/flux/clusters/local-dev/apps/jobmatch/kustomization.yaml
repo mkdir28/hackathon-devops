@@ -3,4 +3,3 @@ kind: Kustomization
 resources:
   - ns.yaml
   - helm-release.yaml
-  - flux-image-policy.yaml
