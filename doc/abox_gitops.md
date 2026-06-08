@@ -6,11 +6,11 @@
 
 ## 1. Аналіз ідеї (Оцінка рішення)
 
-Ідея розгорнути Kubernetes-кластер за допомогою **abox** на віртуальній машині (Compute Engine) в GCP з ізоляцією середовищ на рівні Namespace є **надзвичайно вдалою та оптимальною для хакатону** з кількох причин:
+Ідея розгорнути Kubernetes-кластер за допомогою **abox** на віртуальній машині (Compute Engine) в GCP з ізоляцією середовищ на рівні Namespace є **надзвичайно вдалою та оптимальною для стартапу Scout** з кількох причин:
 
 ### 👍 Чому це гарна ідея (Плюси):
-1. **Економічність (Cost Efficiency):** Замість створення 2-3 окремих керованих кластерів GKE (що коштує дорого та довго розгортається), ви використовуєте одну потужну віртуальну машину (наприклад, `e2-standard-4` або `e2-standard-8`), яка хостить локальний KinD-кластер. Це економить бюджет хакатону та дозволяє вкластися у безкоштовні ліміти.
-2. **Все включено з коробки (Out-of-the-Box AI Infra):** `abox` автоматично ставить **AgentGateway** (Gateway API) та **kagent**, що закриває вимоги хакатону щодо AI-інфраструктури та безпеки промптів.
+1. **Економічність (Cost Efficiency):** Замість створення 2-3 окремих керованих кластерів GKE (що коштує дорого та довго розгортається), ви використовуєте одну потужну віртуальну машину (наприклад, `e2-standard-4` або `e2-standard-8`), яка хостить локальний KinD-кластер. Це економить бюджет стартапу Scout та дозволяє вкластися у безкоштовні ліміти.
+2. **Все включено з коробки (Out-of-the-Box AI Infra):** `abox` автоматично ставить **AgentGateway** (Gateway API) та **kagent**, що закриває вимоги стартапу Scout щодо AI-інфраструктури та безпеки промптів.
 3. **Швидкість розгортання:** Створення кластера через KinD/k3d у VM триває менше 3 хвилин. Будь-які помилки лікуются простим видаленням та перестворенням VM.
 4. **Namespace-ізоляція:** Спільний кластер з різними Namespace (`jobmatch-dev`, `jobmatch-staging`, `jobmatch-prod`) є класичним патерном для невеликих команд. Він забезпечує швидкий мережевий зв'язок та спільне використання ресурсів (наприклад, одна інстанція Qdrant або Redis може хостити різні бази для dev/prod).
 
@@ -34,40 +34,7 @@ gcloud compute instances create abox-sandbox \
     --boot-disk-type=pd-ssd \
     --tags=http-server,https-server
 ```
-*Важливо: переконайтеся, що у Firewall GCP дозволено вхідний HTTP/HTTPS трафік (порти 80, 443).*
-
-### Крок 2: Встановлення Docker на VM
-Підключіться до VM через SSH та встановіть Docker:
-```bash
-sudo apt-get update
-sudo apt-get install -y docker.io
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-### Крок 3: Клонування та запуск abox
-```bash
-git clone https://github.com/den-vasyliev/abox.git
-cd abox
-make run
-```
-Ця команда автоматично встановить OpenTofu, k9s, розгорне KinD кластер із 3 нодами, підніме FluxCD та встановить AgentGateway з kagent.
-
----
-
-## 3. CI/CD для середовищ, ізольованих на рівні Namespace
-
-Оскільки всі середовища живуть в одному кластері, CI/CD будується через реліз-тегування в GHCR та сканування Flux:
-
-1. **Гілка `dev`** -> GHA збирає образ `jobmatch-api:v1.0.0-<sha>-dev` -> Пушить в GHCR.
-2. **Гілка `main`** -> GHA збирає образ `jobmatch-api:v1.0.0-<sha>` -> Пушить в GHCR.
-3. **Flux ImagePolicies** сканують GHCR та фільтрують теги:
-   * `jobmatch-api-dev` реагує тільки на теги `*-dev`. При появі нового тегу Flux оновлює файл `platform/environments/dev/deployment.yaml` і застосовує його в namespace `jobmatch-dev`.
-   * `jobmatch-api-prod` реагує на чисті версії (semver). При появі нового тегу Flux оновлює `platform/environments/prod/deployment.yaml` у namespace `jobmatch-prod`.
-
----
-
-## 4. Структура папки Flux з маніфестами (GitOps Repository Layout)
+*Важливо: переконайтеся, що у## 4. Структура папки Flux з маніфестами (GitOps Repository Layout)
 
 Для керування середовищами через FluxCD, папка `platform/` у нашому репозиторії структурується наступним чином:
 
@@ -76,14 +43,23 @@ platform/
 ├── flux/
 │   ├── gotk-sync.yaml             # Конфігурація підключення Flux до Git
 │   └── kustomizations.yaml        # Опис Kustomizations для dev та prod
-├── environments/
-│   ├── dev/
-│   │   ├── kustomization.yaml     # Оверлей для dev (Namespace: jobmatch-dev)
-│   │   └── deployment.yaml        # Деплоймент з маркером автооновлення образу
-│   └── prod/
-│       ├── kustomization.yaml     # Оверлей для prod (Namespace: jobmatch-prod)
-│       └── deployment.yaml        # Деплоймент з маркерами лімітів та реплік
-└── flux-image-policy.yaml         # Правила сканування GHCR та автокомітів
+├── helm/
+│   └── jobmatch/                  # Наш Umbrella Helm Chart
+│       ├── Chart.yaml             # Визначення чарту та залежностей (Redis, Qdrant)
+│       ├── values.yaml            # Значення за замовчуванням
+│       ├── skills/                # Синхронізовані файли промптів
+│       └── templates/             # Шаблони Web, API та ConfigMap
+│           ├── deployment-api.yaml
+│           ├── deployment-web.yaml
+│           ├── configmap-skills.yaml
+│           └── ...
+└── environments/
+    ├── dev/
+    │   ├── kustomization.yaml     # Оверлей для dev (Namespace: jobmatch-dev)
+    │   └── helm-release.yaml      # FluxCD HelmRelease з параметрами для dev
+    └── prod/
+        ├── kustomization.yaml     # Оверлей для prod (Namespace: jobmatch-prod)
+        └── helm-release.yaml      # FluxCD HelmRelease з параметрами для prod
 ```
 
 ### Приклади ключових маніфестів Flux:
@@ -94,7 +70,7 @@ platform/
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: jobmatch-dev-sync
+  name: jobmatch-dev
   namespace: flux-system
 spec:
   interval: 2m0s
@@ -103,13 +79,12 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  decryption:
-    provider: sops # Якщо використовуємо SOPS секрети
+  timeout: 1m
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: jobmatch-prod-sync
+  name: jobmatch-prod
   namespace: flux-system
 spec:
   interval: 5m0s
@@ -118,10 +93,11 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
+  timeout: 2m
 ```
 
 #### 📂 `platform/environments/dev/kustomization.yaml`
-Оверлей для розробки. Створює namespace `jobmatch-dev` та генерує скіли як ConfigMap.
+Оверлей для розробки. Встановлює цільовий namespace та підключає Helm-реліз.
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -129,21 +105,7 @@ kind: Kustomization
 namespace: jobmatch-dev
 
 resources:
-  - deployment.yaml
-
-# Генерація скілів як ConfigMap (PromptOps)
-configMapGenerator:
-  - name: jobmatch-skills
-    files:
-      - agent-tools.md=skills/agent-tools/SKILL.md
-      - cv-extraction.md=skills/cv-extraction/SKILL.md
-      - global-job-boards.md=skills/global-job-boards/SKILL.md
-      - job-analyzer.md=skills/job-analyzer/SKILL.md
-      - job-crawler.md=skills/job-crawler/SKILL.md
-      - job-match-scoring.md=skills/job-match-scoring/SKILL.md
-      - job-search.md=skills/job-search/SKILL.md
-      - structured-output.md=skills/structured-output/SKILL.md
-      - transferable-skills.md=skills/transferable-skills/SKILL.md
+  - helm-release.yaml
 
 labels:
   - includeSelectors: true
@@ -151,50 +113,60 @@ labels:
       environment: development
 ```
 
-#### 📂 `platform/environments/dev/deployment.yaml`
-Конфігурація деплойменту в dev з монтуванням ConfigMap.
+#### 📂 `platform/environments/dev/helm-release.yaml`
+Конфігурація деплойменту в dev за допомогою FluxCD `HelmRelease`.
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
 metadata:
-  name: jobmatch-api
+  name: jobmatch-dev
+  namespace: jobmatch-dev
 spec:
-  replicas: 1
-  template:
+  interval: 5m
+  chart:
     spec:
-      containers:
-        - name: api
-          image: ghcr.io/mkdir28/jobmatch-api:v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-api-dev"}
-          ports:
-            - containerPort: 3001
-          env:
-            - name: PORT
-              value: "3001"
-            - name: LLM_PROVIDER
-              value: "auto"
-            - name: SKILLS_DIR
-              value: "/app/skills"
-          volumeMounts:
-            - name: skills-volume
-              mountPath: /app/skills
-      volumes:
-        - name: skills-volume
-          configMap:
-            name: jobmatch-skills
+      chart: ./platform/helm/jobmatch
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  values:
+    global:
+      environment: dev
+    api:
+      replicaCount: 1
+      image:
+        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-api-dev"}
+    web:
+      replicaCount: 1
+      image:
+        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-web-dev"}
+    redis:
+      enabled: true
+      architecture: standalone
+      master:
+        persistence:
+          enabled: false
+    qdrant:
+      enabled: true
+      persistence:
+        enabled: false
 ```
 
 ---
 
-## 5. Обмеження Kustomize & Автоматизація Синхронізації
+## 5. Управління промптами (PromptOps) & Синхронізація
 
-Kustomize має вбудоване обмеження безпеки (**Load Restrictors**), яке за замовчуванням забороняє генераторам (`configMapGenerator`, `secretGenerator`) читати файли поза поточною директорією оверлею (наприклад, `../../../app/skills/` поверне помилку безпеки). Оскільки FluxCD виконує Kustomize всередині кластера без можливості відключити це обмеження, ми реалізували наступний підхід:
+Використання Kustomize `configMapGenerator` для файлів скілів, розташованих вище папки оверлею, блокується правилами безпеки Kustomize Load Restrictors, які FluxCD не дозволяє обійти. 
 
-1. **Локальні копії:** У кожному оверлеї (`dev` та `prod`) створено підпапку `skills/` (`platform/environments/dev/skills/`), яка містить копію файлів з `app/skills/`.
-2. **Скрипт синхронізації:** Створено скрипт `scripts/sync-skills.sh`, який автоматично оновлює локальні копії скілів перед комітом:
-   ```bash
-   ./scripts/sync-skills.sh
-   ```
-3. **Валідація в CI:** У GitHub Actions додано крок `Verify Skills Sync`, який перевіряє, чи скіли в `platform/environments/*/skills/` ідентичні скілам в `app/skills/`. Якщо розробник забув запустити скрипт синхронізації та зробити коміт, пайплайн завершиться помилкою.
+Ми вирішили цю проблему, перенісши генерацію `ConfigMap` на рівень **Helm**:
+
+1. **Динамічний імпорт у Helm:** У нашому Helm-чарті створено шаблон `templates/configmap-skills.yaml`, який використовує вбудовану функцію Helm `.Files.Glob`, автоматично зчитуючи всі markdown-файли з папки `skills/` всередині чарту і монтуючи їх як окремі ключі ConfigMap.
+2. **Скрипт локального копіювання:** Створено скрипт `scripts/sync-skills.sh`, який копіює актуальні файли з `app/skills` до `platform/helm/jobmatch/skills/` перед комітом.
+3. **Контроль в CI:** Крок `Verify Skills Sync` у GitHub Actions перевіряє, чи скіли в репозиторії Helm-чарту синхронізовані з кодом. Це гарантує цілісність промптів і запобігає розбіжностям у конфігураціях.
 
 ---
 
@@ -204,7 +176,7 @@ Kustomize має вбудоване обмеження безпеки (**Load Re
 
 Щоб зробити API-шлюз доступним із публічного інтернету:
 
-### Варіант А: Прокидання портів через `socat` (Найпростіший для хакатону)
+### Варіант А: Прокидання портів через `socat` (Найпростіший для стартапу Scout)
 Запустіть утиліту `socat` як фонову службу на VM, щоб перенаправляти вхідний трафік на порти `80` та `443` VM на IP-адресу LoadBalancer кластера:
 ```bash
 # Отримайте IP LoadBalancer AgentGateway
@@ -230,4 +202,3 @@ server {
     }
 }
 ```
-

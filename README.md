@@ -15,9 +15,11 @@
 │   ├── skills/               # Версіоновані вміння агента (SKILL.md)
 │   └── prompts/              # Системні промпти та шаблони ролей LLM
 ├── platform/                 # Контур інфраструктури (GitOps)
-│   ├── environments/         # Окремі overlays для Kustomize
-│   │   ├── dev/              # Маніфести середовища розробки
-│   │   └── prod/             # Маніфести продакшн середовища
+│   ├── flux/                 # Налаштування FluxCD (gotk-sync, kustomizations)
+│   ├── environments/         # Окремі оверлеї для середовищ
+│   │   ├── dev/              # Конфігурація dev (helm-release.yaml)
+│   │   └── prod/             # Конфігурація prod (helm-release.yaml)
+│   ├── helm/                 # Наш Umbrella Helm Chart (Redis, Qdrant)
 │   └── flux-image-policy.yaml# Конфігурація автоматизації FluxCD
 ├── evals/                    # Контур оцінки моделей (Quality Gate)
 │   ├── dataset.json          # Золотий набір тест-кейсів

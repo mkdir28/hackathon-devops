@@ -1,6 +1,6 @@
 # Роадмап реалізації цільової архітектури (Architecture Implementation Roadmap)
 
-Цей документ визначає різницю між поточним станом коду в репозиторії (MVP) та цільовою архітектурою (Target Architecture), яка описана в HLD та ADR для хакатону. Тут наведено детальний план переходу, вимоги та кроки для впровадження відсутніх компонентів.
+Цей документ визначає різницю між поточним станом коду в репозиторії (MVP) та цільовою архітектурою (Target Architecture), яка описана в HLD та ADR для стартапу Scout. Тут наведено детальний план переходу, вимоги та кроки для впровадження відсутніх компонентів.
 
 ---
 
@@ -15,7 +15,7 @@
 | **Збереження даних**| **Stateless:** резюме тимчасово зберігаються на диску сервера (`uploads/`), а вся витягнута інформація (CV skills, summary) зберігається в **LocalStorage браузера**. БД чи кеш відсутні. | **Базовий MVP** (Тимчасові файли) |
 | **LLM провайдери**| Мультипровайдерний `AIClient` (OpenAI, Gemini, Anthropic) з автоматичним перемиканням (`auto`). | **100% готовність** |
 | **CI/CD пайплайн**| GitHub Actions автоматично запускає лінтер, перевірку типів, Quality Gate (Evals у mock-режимі) та білдить докер-контейнери. | **100% готовність** |
-| **Маніфести K8s**  | Базові маніфести Kustomize (`dev`/`prod`) та оновлення тегів FluxCD (`flux-image-policy.yaml`). | **100% готовність** (Маніфести-скелети) |
+| **Маніфести K8s**  | Локальний Helm-чарт з сабчартами та оверлеї `environments/` (Kustomize + HelmRelease) для FluxCD. | **100% готовність** (Маніфести-скелети) |
 
 ---
 
@@ -34,7 +34,7 @@
  └───────────┘    └───────────┘    └─────────────────┘    └─────────────────┘
        │
        ▼
-[ Цільова архітектура хакатону (Stateful & Secured) ]
+[ Цільова архітектура стартапу Scout (Stateful & Secured) ]
 ```
 
 ---
@@ -48,9 +48,9 @@
      ```bash
      k3d cluster create jobmatch --port 8080:80@loadbalancer
      ```
-  2. Застосувати локальні Kustomize-маніфести:
+  2. Застосувати локальний Helm-чарт для тестування:
      ```bash
-     kubectl apply -k platform/environments/dev/
+     helm install jobmatch platform/helm/jobmatch --namespace jobmatch-dev --create-namespace
      ```
   3. Створити Kubernetes Secret для API ключів вручну (тимчасово для Dev):
      ```bash
@@ -76,8 +76,8 @@
   * Створити сервіс кешування `app/server/services/cache.ts`.
   * У файлі `app/server/agent/JobSearchAgent.ts` перед викликом інструментів пошуку перевіряти наявність ключа `query:country` у Redis.
 * **Вимоги (Що додати в інфраструктуру):**
-  * Додати StatefulSet для Redis або скористатися Helm-релізом Redis.
-  * Прописати змінну оточення `REDIS_URL` в `deployment.yaml`.
+  * Увімкнути сабчарт Redis у `platform/helm/jobmatch/values.yaml` (`redis.enabled: true`).
+  * Прописати змінну оточення `REDIS_URL` в `deployment-api.yaml` (вказує на `jobmatch-redis-master`).
 
 ---
 
@@ -89,8 +89,8 @@
   * Завантажувати вектори резюме в колекцію Qdrant.
   * Замінити повний LLM-скоринг вакансій на попередній векторний пошук у Qdrant, вибираючи лише ТОП-10 найкращих вакансій за косинусною близькістю для фінального LLM-аналізу.
 * **Вимоги (Що додати в інфраструктуру):**
-  * Задеплоїти Qdrant у Kubernetes кластер (StatefulSet з Persistent Volume для SSD дисків).
-  * Додати змінну оточення `QDRANT_URL` у бекенд-контейнер.
+  * Увімкнути сабчарт Qdrant у `platform/helm/jobmatch/values.yaml` (`qdrant.enabled: true`).
+  * Додати змінну оточення `QDRANT_URL` у бекенд-контейнер в `deployment-api.yaml`.
 
 ---
 

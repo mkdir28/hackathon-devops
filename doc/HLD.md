@@ -1,6 +1,6 @@
 # High-Level Solution Design (HLD) — JobMatch Platform
 
-Цей документ визначає високорівневу архітектуру платформи **JobMatch**, включаючи дизайн компонентів, життєвий цикл запитів, процес CI/CD автоматизації та контур тестування якості (Evals).
+Цей документ визначає високорівневу архітектуру платформи **JobMatch**, включаючи дизайн компонентів, життєвий цикл запитів, процес CI/CD автоматизації та контур тестування якості (Evals) для стартапу Scout.
 
 ---
 
@@ -80,14 +80,14 @@ sequenceDiagram
         CI-->>Git: Fail Pipeline (Block Merge / Status check red)
     end
     Registry->>Flux: ImageRepository scans new tags
-    Flux->>Git: Auto-commit new image tag into platform/environments/<env>
+    Flux->>Git: Auto-commit new image tag into platform/environments/<env>/helm-release.yaml
     Git->>Flux: Sync Git state (Pull updated manifests)
-    Flux->>K8s: Reconcile Deployment (Rolling Update)
+    Flux->>K8s: Reconcile HelmRelease (Rolling Update)
 ```
 
 ### Стратегія просування (Promotion Strategy):
-* **Гілка `dev`:** Націлена на середовище розробки `Development`. Пайплайн запускає лінтування, швидкі тести та збирає образ із тегом `*-dev`. FluxCD автоматично деплоїть його у dev namespace.
-* **Гілка `main`:** Націлена на середовище `Production`. Повний прогін `eval-suite` (якість + безпека). У разі успіху збирається релізний образ, FluxCD оновлює прод-конфігурацію в `platform/environments/prod`.
+* **Гілка `dev`:** Націлена на середовище розробки `Development`. Пайплайн запускає лінтування, швидкі тести та збирає образ із тегом `*-dev`. FluxCD автоматично деплоїть його у dev namespace через `HelmRelease`.
+* **Гілка `main`:** Націлена на середовище `Production`. Повний прогін `eval-suite` (якість + безпека). У разі успіху збирається релізний образ, FluxCD оновлює прод-конфігурацію в `platform/environments/prod/helm-release.yaml`.
 
 ---
 
@@ -134,4 +134,4 @@ flowchart TD
 * **PII Redaction:** Усі резюме анонімізуються на рівні Express-сервера перед надсиланням до хмарних LLM.
 * **Структурне тегування:** Вхідні дані користувача відокремлюються від системних інструкцій за допомогою суворих XML-тегів, що мінімізує успішність атак "ignore previous instructions".
 * **allow-list інструментів:** Агент має обмежений набір дій (наприклад, дозволено робити HTTP GET тільки на валідовані домени дощок вакансій).
-* **secrets поза git:** Усі API-ключі LLM-провайдерів розгортаються через SealedSecrets / HashiCorp Vault і монтуються в контейнер як змінні оточення під час старту поду в K8s.
+* **secrets поза git:** Усі API-ключі LLM-провайдерів розгортаються через External Secrets Operator (ESO) з інтеграцією GCP Secret Manager та монтуються в контейнер як змінні оточення під час старту поду в K8s.

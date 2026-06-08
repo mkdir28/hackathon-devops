@@ -1,6 +1,6 @@
 # Architectural Decision Records (ADR) — JobMatch Platform
 
-Цей документ фіксує ключові архітектурні рішення, прийняті для забезпечення зрілості інженерного контуру (SDLC, Harness, Evals, Security, FinOps) платформи **JobMatch** під час хакатону.
+Цей документ фіксує ключові архітектурні рішення, прийняті для забезпечення зрілості інженерного контуру (SDLC, Harness, Evals, Security, FinOps) платформи **JobMatch** для стартапу Scout.
 
 ---
 
@@ -25,7 +25,7 @@
 ### Рішення
 Використовувати структуру монорепозиторію з розділенням:
 1. `app/` — код застосунку (React/Vite frontend + Node.js API server/worker + вбудовані `skills/`).
-2. `platform/` — Kubernetes-декларації (Kustomize/Helm), налаштування для GitOps-інструменту FluxCD.
+2. `platform/` — Kubernetes-декларації (локальний Helm Umbrella Chart з сабчартами Redis/Qdrant + Kustomize/HelmRelease оверлеї), налаштування для GitOps-інструменту FluxCD.
 3. `evals/` — ізольований тестовий фреймворк для оцінки якості відповідей LLM та безпеки.
 
 ### Наслідки
@@ -49,8 +49,8 @@
      - Для гілки `main`: `v<version>-<sha>` та оновлюваний `latest`.
 2. **GitOps через FluxCD (CD):**
    - У кластері працюють контролери `ImageRepository` та `ImagePolicy`, які сканують GHCR.
-   - Контролер `ImageUpdateAutomation` автоматично записує новий тег образу в репозиторій Git (у директорію `platform/environments/...`).
-   - FluxCD `Kustomization` застосовує зміни до кластера.
+   - Контролер `ImageUpdateAutomation` автоматично записує новий тег образу в репозиторій Git (у `values` відповідного `HelmRelease` файлу).
+   - FluxCD `HelmRelease` застосовує зміни до кластера.
 
 ```mermaid
 graph TD
@@ -80,8 +80,8 @@ graph TD
 2. Будь-яка зміна промпту або скіла повинна проходити через Pull Request та пробігати `evals/run-evals.mjs` перед мерджем.
 3. **Декуплінг доставки промптів від коду:**
    - Налаштувати path-filtering у GitHub Actions (CI) так, щоб при зміні виключно промптів/скілів контейнери **не перезбиралися**.
-   - Доставляти файли скілів у контейнер за допомогою **Kubernetes ConfigMap**. Kustomize `configMapGenerator` автоматично генерує та гешує ConfigMap (наприклад, `jobmatch-skills-<hash>`) на основі вмісту каталогу `app/skills/`.
-   - Бекенд API монтує цей ConfigMap як read-only volume у `/app/skills`. При оновленні скілів у Git, FluxCD оновлює ім'я ConfigMap у Deployment, що запускає швидкий (до 5 секунд) Rolling Update подів без перевипуску образу.
+   - Доставляти файли скілів у контейнер за допомогою **Kubernetes ConfigMap**. Локальний Helm-чарт автоматично зчитує вміст каталогу `platform/helm/jobmatch/skills/` за допомогою `.Files.Glob` та динамічно будує ConfigMap.
+   - Бекенд API монтує цей ConfigMap як read-only volume у `/app/skills`. При оновленні скілів у Git, FluxCD синхронізує ConfigMap, а зміна контрольної суми (checksum) у шаблоні Deployment запускає швидкий (до 5 секунд) Rolling Update подів без перевипуску образу.
    - Сервер підтримує динамічне читання як з вкладених папок, так і з плоских файлів у `/app/skills`.
 
 ### Наслідки

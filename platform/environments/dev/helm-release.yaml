@@ -1,0 +1,38 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: jobmatch-dev
+  namespace: jobmatch-dev
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./platform/helm/jobmatch
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  values:
+    global:
+      environment: dev
+    api:
+      replicaCount: 1
+      image:
+        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-api-dev"}
+    web:
+      replicaCount: 1
+      image:
+        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-web-dev"}
+    redis:
+      enabled: true
+      architecture: standalone
+      master:
+        persistence:
+          enabled: false
+    qdrant:
+      enabled: true
+      persistence:
+        enabled: false

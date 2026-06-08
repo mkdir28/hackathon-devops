@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "jobmatch.fullname" . }}-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "jobmatch.labels" . | nindent 4 }}
+    app: {{ include "jobmatch.fullname" . }}-web
+spec:
+  replicas: {{ .Values.web.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "jobmatch.selectorLabels" . | nindent 6 }}
+      app: {{ include "jobmatch.fullname" . }}-web
+  template:
+    metadata:
+      labels:
+        {{- include "jobmatch.selectorLabels" . | nindent 8 }}
+        app: {{ include "jobmatch.fullname" . }}-web
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          {{- if .Values.web.resources }}
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          {{- end }}

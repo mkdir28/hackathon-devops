@@ -4,23 +4,9 @@ kind: Kustomization
 namespace: jobmatch-prod
 
 resources:
-  - deployment.yaml
-
-configMapGenerator:
-  - name: jobmatch-skills
-    files:
-      - agent-tools.md=skills/agent-tools/SKILL.md
-      - cv-extraction.md=skills/cv-extraction/SKILL.md
-      - global-job-boards.md=skills/global-job-boards/SKILL.md
-      - job-analyzer.md=skills/job-analyzer/SKILL.md
-      - job-crawler.md=skills/job-crawler/SKILL.md
-      - job-match-scoring.md=skills/job-match-scoring/SKILL.md
-      - job-search.md=skills/job-search/SKILL.md
-      - structured-output.md=skills/structured-output/SKILL.md
-      - transferable-skills.md=skills/transferable-skills/SKILL.md
+  - helm-release.yaml
 
 labels:
   - includeSelectors: true
     pairs:
       environment: production
-
