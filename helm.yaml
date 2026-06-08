@@ -1,0 +1,412 @@
+---
+# Source: jobmatch/templates/configmap-skills.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-release-jobmatch-skills
+  namespace: default
+  labels:
+    helm.sh/chart: jobmatch-1.0.0
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  agent-tools.md: |
+    # Job search agent tools
+    
+    > Production job matching uses tools first, then LLM ranking on verified URLs only.
+    
+    ## Tools (server/agent/tools)
+    
+    | Tool | Purpose |
+    |------|---------|
+    | `fetch_job_board` | HTTP fetch + HTML parser for boards with `searchUrlTemplate` (DOU, Work.ua, Djinni, generic) |
+    | `web_search_jobs` | Site-scoped search via the active LLM provider's native web search for LinkedIn, Indeed, Glassdoor, etc. |
+    
+    ## Flow
+    
+    1. Select boards from catalog for `countryCode`.
+    2. Run `fetch_job_board` and `web_search_jobs` in parallel (with timeouts).
+    3. Deduplicate by `applyUrl`.
+    4. LLM ranks only listings from tool output; drop any URL not in the allow-list.
+    
+    ## Requirements
+    
+    - A configured LLM provider (`OPENAI`, `GEMINI`, or `ANTHROPIC` key) with native web search
+    - `DEMO_MODE` must not be used for job search (no mock listings)
+    
+    ## Web search by provider
+    
+    | Provider | Mechanism |
+    |----------|-----------|
+    | Gemini | Google Search grounding (`googleSearch` tool) |
+    | OpenAI | Responses API `web_search` tool |
+    | Claude | Messages API `web_search_20250305` tool |
+    
+  cv-extraction.md: |
+    # CV extraction
+    
+    > Parse resume text into structured fields for downstream job matching.
+    
+    ## Behavior
+    
+    - Extract `summary`, `skills[]`, `experience[]`, and `education[]` when present.
+    - Do not invent employers or dates; use only what appears in the document.
+    - Normalize skill names (e.g. "K8s" → include "Kubernetes" if context supports it).
+    - Keep descriptions concise.
+    
+  global-job-boards.md: |
+    # Global job boards catalog
+    
+    > Use the server catalog (`server/data/job-boards.json`, 79 boards; source: `src/lib/jobWebsites.ts`) to pick sites by country before any search.
+    
+    ## Selection rules
+    
+    1. Resolve `countryCode` from the user request (e.g. `UA`, `US`, `WORLDWIDE`, `REMOTE`).
+    2. Include boards where `countries` contains that code, `GLOBAL`, `WORLDWIDE`, or `REMOTE` when relevant.
+    3. Sort by `priority` descending; run at most 12 boards per search.
+    4. Never invent listings — only return jobs discovered by agent tools (`fetch_job_board`, `web_search_jobs`).
+    
+    ## Regions in catalog
+    
+    | Region | Example boards |
+    |--------|----------------|
+    | Ukraine | DOU.ua, Work.ua, Robota.ua, Djinni |
+    | United States | Indeed, LinkedIn, Glassdoor, Dice, ZipRecruiter |
+    | United Kingdom | Indeed UK, Reed, Totaljobs |
+    | Germany | Indeed DE, StepStone, XING |
+    | Poland | Pracuj.pl, Just Join IT, No Fluff Jobs |
+    | Global / Remote | LinkedIn, Remote OK, Wellfound, Himalayas |
+    
+    Full list is loaded at runtime from JSON; the agent injects the country-specific subset into the LLM ranking prompt.
+    
+  job-analyzer.md: |
+    # Job application analyzer
+    
+    > Adapted from [job-search-skills/job-analyzer](https://github.com/sameergdogg/job-search-skills/blob/main/job-analyzer/SKILL.md). When CV data is present, assess fit and surface gaps alongside ranked results.
+    
+    ## When CV data is provided
+    
+    The user block may include `CV summary`, `CV skills`, and structured experience from upload. Use it for ranking and rationale — do not invent employers or dates.
+    
+    ## Compatibility indicators (embed in rationale or tags)
+    
+    For each ranked job, mentally assess:
+    
+    - ✅ **STRONG** — direct match in CV
+    - ⚠️ **PARTIAL** — adjacent experience
+    - ❌ **GAP** — required skill missing from CV
+    
+    Prefer tags that name concrete skills (e.g. `Terraform`, `On-call`) over vague labels.
+    
+    ## Resume philosophy (for suggestions)
+    
+    When generating `suggestions` (follow-up search queries), avoid keyword stuffing. Suggest queries that:
+    
+    - Target roles where the user's **proven** skills overlap
+    - Explore adjacent titles (Tier 2) when direct matches are thin
+    - Adjust seniority or remote/hybrid filters
+    
+    Do **not** output full cover letters or resume rewrites in the JSON — only `jobs`, `suggestions`, and structured fields in the schema.
+    
+    ## Surgical fit notes
+    
+    In `rationale`, call out:
+    
+    - One strength tied to a CV skill or achievement theme
+    - One gap or stretch (if any) in plain language
+    
+    ## Honesty
+    
+    "Strong fit for X, but Y is a gap" is more useful than uniform high scores. Never fabricate experience to justify a match.
+    
+    ## Company research
+    
+    Do not add extra JSON fields for company research. If compensation is unknown, use public-data `salaryEstimate` with an "estimate" note per the job-search skill.
+    
+  job-crawler.md: |
+    # Job crawler (company careers & ATS)
+    
+    > Adapted from [job-search-skills/job-crawler](https://github.com/sameergdogg/job-search-skills/blob/main/job-crawler/SKILL.md). Crawl company career pages via public ATS APIs when possible; filter and rank roles against the candidate CV.
+    
+    ## When this applies
+    
+    Use when listings come from company career sites or ATS-hosted boards (Greenhouse, Lever, Ashby, etc.), or when the user's query names a specific employer.
+    
+    ## ATS detection
+    
+    Prefer public JSON APIs over HTML scraping:
+    
+    | Platform | Career URL pattern | API |
+    |----------|-------------------|-----|
+    | **Lever** | `jobs.lever.co/{company}` | `https://api.lever.co/v0/postings/{company}?mode=json` |
+    | **Greenhouse** | `boards.greenhouse.io/{company}` | `https://api.greenhouse.io/v1/boards/{company}/jobs?content=true` |
+    | **Ashby** | `jobs.ashbyhq.com/{company}` | `https://api.ashbyhq.com/posting-api/job-board/{company}?includeCompensation=true` |
+    | **Recruitee** | `{company}.recruitee.com` | `https://{company}.recruitee.com/api/offers` |
+    | **Workable** | `apply.workable.com/{company}` | `https://apply.workable.com/api/v1/widget/accounts/{company}` |
+    
+    If the URL is on the company domain, look for embedded Lever/Greenhouse/Ashby iframes or script references before falling back to HTML fetch.
+    
+    ## Filter before ranking
+    
+    1. **Department** — prefer Engineering, Platform, Infrastructure, Product Development, SRE, DevOps.
+    2. **Location** — respect country/remote from the user request; remote-eligible roles are OK.
+    3. **Tiered title matching** (do not match titles only):
+       - **Tier 1:** Direct title match to the user's query or primary specialty.
+       - **Tier 2:** Adjacent titles — read the description; titles are misleading.
+       - **Tier 3:** Stretch roles only if Tier 1–2 are sparse.
+    4. **Deduplicate** — same role in multiple locations = one entry; pick the level closest to the user's seniority.
+    
+    ## Output rules (this app)
+    
+    - Every job must keep a verified `applyUrl` from tool output — never invent URLs.
+    - Prefer 8–15 candidates before deep analysis; rank up to **10** for the JSON response.
+    - If nothing fits well, say so honestly (e.g. best match ~45/100).
+    
+    ## Hard filters (from user prompt / CV)
+    
+    - Exclude roles that violate stated location constraints.
+    - Flag (do not auto-exclude) roles where excluded keywords appear only as "nice to have."
+    
+  job-match-scoring.md: |
+    # Job match scoring
+    
+    > Adapted from [job-search-skills/job-crawler](https://github.com/sameergdogg/job-search-skills/blob/main/job-crawler/SKILL.md) Step 4. Weighted 0–100 scoring for ranking verified listings.
+    
+    ## Match score (0–100)
+    
+    Compute `score` for each listing using these factors:
+    
+    | Factor | Weight | Assess |
+    |--------|--------|--------|
+    | **Core skill overlap** | 35% | % of role requirements met by CV skills/query; count transferable skills (e.g. K8s ↔ Kubernetes). |
+    | **Experience level fit** | 20% | Exact level → 100%; one level above → 60%; one level below → 50%; two+ levels off → 20%. |
+    | **Domain relevance** | 20% | Same domain → 100%; adjacent → 70%; unrelated → 30%. |
+    | **Requirement gap severity** | 15% | 0 must-have gaps → 100%; 1 minor → 80%; 1 major → 50%; 2+ major → 20%. Major = core tech with no CV evidence. |
+    | **Growth opportunity** | 10% | Leverages strengths + reasonable stretch → 100%; same skills only → 50%; all-new stack → 30%. |
+    
+    ## Rationale field
+    
+    In ≤40 words, mention the top 1–2 factors driving the score (not a generic "good fit").
+    
+    ## Honesty
+    
+    - A 45/100 can still appear if it is the best verified listing — note gaps in `rationale`.
+    - Do not inflate scores; use the full range.
+    - Sort `jobs` by `score` descending.
+    
+    ## CV absent
+    
+    When no CV is uploaded, weight **core skill overlap** from the natural-language query and listing snippet/title only.
+    
+  job-search.md: |
+    # Job search matching
+    
+    > Agentic search across 80+ job boards (by country), then LLM ranking on verified URLs only.
+    
+    ## Behavior
+    
+    - Boards are selected from `server/data/job-boards.json` (see `global-job-boards` skill).
+    - Tools `fetch_job_board` and `web_search_jobs` collect listings before the LLM runs.
+    - Return only jobs with a real `applyUrl` from tool output (HTTP/HTTPS listing page).
+    - Ukraine: prioritize DOU.ua, Work.ua, Djinni; global: LinkedIn, Indeed, Glassdoor, etc.
+    - Sort by `score` descending (0–100).
+    - Keep `rationale` under 40 words.
+    - Include 2–5 `tags` per job.
+    - Provide 3–5 follow-up `suggestions` as short search queries.
+    
+    ## Salary and logos
+    
+    - `salaryEstimate`: monthly USD range when plausible; note it is an estimate.
+    - `logoUrl`: prefer `https://logo.clearbit.com/{domain}` when a company domain is known.
+    
+  structured-output.md: |
+    # Structured JSON output
+    
+    > Emit machine-readable JSON that validates against the requested schema.
+    
+    ## Rules
+    
+    - Output JSON only. No markdown code fences, no preamble, no trailing commentary.
+    - Use double-quoted keys and strings.
+    - Omit fields that are truly unknown rather than using placeholder values.
+    - Arrays must match the schema item types.
+    
+  transferable-skills.md: |
+    # Transferable skills matching
+    
+    > Adapted from [job-search-skills](https://github.com/sameergdogg/job-search-skills) matching philosophy. Match on transferable skills, not job titles alone.
+    
+    ## Core rule
+    
+    **Read listing snippets before judging fit.** Titles are misleading — a "Platform Engineer" post may match a DevOps CV; a "Software Engineer" post may be backend-heavy.
+    
+    ## Transferable domains (examples)
+    
+    | User domain | Often matches titles |
+    |-------------|---------------------|
+    | DevOps / SRE | Platform, Infrastructure, Cloud, Release, Build, Observability |
+    | Backend | Fullstack, API, Services, Distributed systems |
+    | Frontend | UI, Web, Design systems, Product engineer |
+    | Data | Analytics, ML platform, BI, Data platform |
+    | Security | AppSec, DevSecOps, Cloud security |
+    | PM / TPM | Program manager, Product owner, Delivery lead |
+    
+    ## Tiered matching
+    
+    1. **Direct** — query title ↔ listing title alignment.
+    2. **Transferable** — skill overlap from snippet/description ≥ ~50% of stated must-haves.
+    3. **Stretch** — include only if fewer than 5 strong matches exist in verified listings.
+    
+    ## Primary specialty
+    
+    When the user's query names a specialty (e.g. "DevOps", "fullstack"), rank listings in that specialty above adjacent ones at equal skill overlap.
+    
+    ## Suggestions output
+    
+    Generate 3–5 **short search queries** the user can paste into the app — vary seniority, remote/on-site, and adjacent titles (Tier 2).
+---
+# Source: jobmatch/templates/service-api.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-release-jobmatch-api
+  namespace: default
+  labels:
+    helm.sh/chart: jobmatch-1.0.0
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  ports:
+    - port: 3001
+      targetPort: 3001
+  selector:
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app: my-release-jobmatch-api
+---
+# Source: jobmatch/templates/service-web.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-release-jobmatch-web
+  namespace: default
+  labels:
+    helm.sh/chart: jobmatch-1.0.0
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app: my-release-jobmatch-web
+---
+# Source: jobmatch/templates/deployment-api.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-release-jobmatch-api
+  namespace: default
+  labels:
+    helm.sh/chart: jobmatch-1.0.0
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app: my-release-jobmatch-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jobmatch
+      app.kubernetes.io/instance: my-release
+      app: my-release-jobmatch-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jobmatch
+        app.kubernetes.io/instance: my-release
+        app: my-release-jobmatch-api
+      annotations:
+        checksum/config: 97992f09d7eae058d465c93e2d57fdba1994ed319ff0ba0b7b30ec3dcfd25674
+    spec:
+      containers:
+        - name: api
+          image: "ghcr.io/mkdir28/jobmatch-api:v1.0.0-dev"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            - name: LLM_PROVIDER
+              value: "auto"
+            - name: SKILLS_DIR
+              value: "/app/skills"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: gemini-api-key
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: anthropic-api-key
+                  optional: true
+          volumeMounts:
+            - name: skills-volume
+              mountPath: /app/skills
+      volumes:
+        - name: skills-volume
+          configMap:
+            name: my-release-jobmatch-skills
+---
+# Source: jobmatch/templates/deployment-web.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-release-jobmatch-web
+  namespace: default
+  labels:
+    helm.sh/chart: jobmatch-1.0.0
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/instance: my-release
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app: my-release-jobmatch-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jobmatch
+      app.kubernetes.io/instance: my-release
+      app: my-release-jobmatch-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jobmatch
+        app.kubernetes.io/instance: my-release
+        app: my-release-jobmatch-web
+    spec:
+      containers:
+        - name: web
+          image: "ghcr.io/mkdir28/jobmatch-web:v1.0.0-dev"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
