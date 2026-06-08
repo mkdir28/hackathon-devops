@@ -1,0 +1,97 @@
+# FluxCD Image Automation Policy definitions
+
+# --- WEB IMAGE REPOSITORY ---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: jobmatch-web
+  namespace: flux-system
+spec:
+  image: ghcr.io/mkdir28/jobmatch-web
+  interval: 2m
+---
+# --- API IMAGE REPOSITORY ---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: jobmatch-api
+  namespace: flux-system
+spec:
+  image: ghcr.io/mkdir28/jobmatch-api
+  interval: 2m
+---
+# --- DEVELOPMENT IMAGE POLICIES ---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: jobmatch-web-dev
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: jobmatch-web
+  policy:
+    filterTags:
+      pattern: '^v[0-9]+\.[0-9]+\.[0-9]+-[a-f0-9]+-dev$'
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: jobmatch-api-dev
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: jobmatch-api
+  policy:
+    filterTags:
+      pattern: '^v[0-9]+\.[0-9]+\.[0-9]+-[a-f0-9]+-dev$'
+---
+# --- PRODUCTION IMAGE POLICIES ---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: jobmatch-web-prod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: jobmatch-web
+  policy:
+    filterTags:
+      pattern: '^v[0-9]+\.[0-9]+\.[0-9]+-[a-f0-9]+$' # Matches v1.0.0-e5f6g7h, excludes -dev
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: jobmatch-api-prod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: jobmatch-api
+  policy:
+    filterTags:
+      pattern: '^v[0-9]+\.[0-9]+\.[0-9]+-[a-f0-9]+$' # Matches v1.0.0-e5f6g7h, excludes -dev
+---
+# --- IMAGE UPDATE AUTOMATION ---
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: jobmatch-automation
+  namespace: flux-system
+spec:
+  interval: 2m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        email: fluxcdbot@users.noreply.github.com
+        name: fluxcdbot
+      messageTemplate: 'chore(gitops): auto-update image tags [skip ci]'
+    push:
+      branch: main
+  update:
+    path: ./platform/environments
+    strategy: Setters
