@@ -21,11 +21,11 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-api-dev"}
+        tag: v1.0.0-dev
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-web-dev"}
+        tag: v1.0.0-dev
 #    redis:
 #      enabled: true
 #      architecture: standalone
