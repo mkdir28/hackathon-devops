@@ -1,8 +1,8 @@
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
+apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: jobmatch-dev
-  namespace: jobmatch-dev
+  namespace: jobmatch-local-dev
 spec:
   interval: 5m
   chart:
@@ -21,11 +21,11 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-dev
+        tag: v1.0.0-c001f8a-dev
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-dev
+        tag: v1.0.0-c001f8a-dev
 #    redis:
 #      enabled: true
 #      architecture: standalone
