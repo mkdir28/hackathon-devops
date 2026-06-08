@@ -8,7 +8,7 @@ metadata:
 spec:
   interval: 1m0s
   ref:
-    branch: main
+    branch: dev
   secretRef:
     name: flux-system
   url: ssh://git@github.com/mkdir28/hackathon-devops
@@ -20,7 +20,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./platfrom/flux/clusters/local-dev
+  path: ./platform/flux/clusters/local-dev
   prune: true
   sourceRef:
     kind: GitRepository
