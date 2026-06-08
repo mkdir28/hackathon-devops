@@ -1,0 +1,9 @@
+dependencies:
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 18.1.5
+- name: qdrant
+  repository: https://qdrant.github.io/qdrant-helm
+  version: 0.7.3
+digest: sha256:ab3c5c3f415aa20abf3b7f45fbe90e3a4da370eb4405d7d01b531c12cf6b7a1b
+generated: "2026-06-08T20:18:43.976068+03:00"

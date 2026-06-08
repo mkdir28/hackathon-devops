@@ -105,9 +105,12 @@ spec:
 ```
 
 ### Step 3: Configure ImageUpdateAutomation
-Flux automatically writes the updated tag back into the YAML manifests (e.g. `k8s/dev/deployment.yaml` or `k8s/prod/deployment.yaml`) using a marker:
+Flux automatically writes the updated tag back into the HelmRelease manifests (e.g. `platform/environments/dev/helm-release.yaml` or `platform/environments/prod/helm-release.yaml`) using setter markers:
 ```yaml
-image: ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h-dev # {"$imagepolicy": "flux-system:jobmatch-web-dev"}
+    api:
+      replicaCount: 1
+      image:
+        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-api-dev"}
 ```
 Once Flux commits the updated values to the repository, it reconciles the cluster state to match the manifest update.
 
@@ -119,43 +122,44 @@ To avoid rebuilding and pushing full container images when only system prompts o
 
 ### A. CI Path Filtering (GitHub Actions)
 In [.github/workflows/deploy.yml](../.github/workflows/deploy.yml), we configure path filters on the Docker build jobs. 
-* If only files in `app/skills/**` or `app/prompts/**` are changed, GHA **skips** the container build/push jobs.
+* If only files in `app/skills/**` are changed, GHA **skips** the container build/push jobs.
 * If any source code files are changed (`app/server/**`, `app/src/**`, `app/package.json`), GHA triggers the full build & push.
 
-### B. Kubernetes ConfigMap Mounts (GitOps)
-We package prompt/skill markdown files into a ConfigMap using Kustomize's `configMapGenerator`.
-In `platform/environments/dev/kustomization.yaml`:
+### B. Local Helm ConfigMap Templates (GitOps)
+We package prompt/skill markdown files into a ConfigMap dynamically using Helm's `.Files.Glob` and `.Files.Get` template features in the local umbrella chart.
+In `platform/helm/jobmatch/templates/configmap-skills.yaml`:
 ```yaml
-configMapGenerator:
-  - name: jobmatch-skills
-    files:
-      - ../../../app/skills/agent-tools/SKILL.md
-      - ../../../app/skills/cv-extraction/SKILL.md
-      - ../../../app/skills/global-job-boards/SKILL.md
-      - ../../../app/skills/job-analyzer/SKILL.md
-      - ../../../app/skills/job-crawler/SKILL.md
-      - ../../../app/skills/job-match-scoring/SKILL.md
-      - ../../../app/skills/job-search/SKILL.md
-      - ../../../app/skills/structured-output/SKILL.md
-      - ../../../app/skills/transferable-skills/SKILL.md
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "jobmatch.fullname" . }}-skills
+data:
+  {{- range $path, $_ :=  .Files.Glob "skills/**/SKILL.md" }}
+  {{- $key := printf "%s.md" (dir $path | base) }}
+  {{ $key }}: |
+{{ $.Files.Get $path | indent 4 }}
+  {{- end }}
 ```
 
-In `platform/environments/dev/deployment.yaml`, we mount this ConfigMap into the `jobmatch-api` container at the configured `SKILLS_DIR` `/app/skills`:
+In `platform/helm/jobmatch/templates/deployment-api.yaml`, we mount this ConfigMap into the `jobmatch-api` container at the configured `SKILLS_DIR` `/app/skills`:
 ```yaml
-spec:
-  containers:
-    - name: api
-      volumeMounts:
+          volumeMounts:
+            - name: skills-volume
+              mountPath: {{ .Values.api.env.SKILLS_DIR }}
+      volumes:
         - name: skills-volume
-          mountPath: /app/skills
-  volumes:
-    - name: skills-volume
-      configMap:
-        name: jobmatch-skills
+          configMap:
+            name: {{ include "jobmatch.fullname" . }}-skills
 ```
 
 ### C. Automatic Hot-Reloading / Rolling Updates
-1. When a prompt or skill file is modified and merged to Git, Kustomize detects the change and automatically **hashes** the generated ConfigMap name (e.g., `jobmatch-skills-h4j2k8`).
-2. FluxCD syncs the new ConfigMap and updates the Deployment volume reference.
-3. Kubernetes immediately triggers a **Rolling Update** of the API pods because the template spec changed.
-4. The new API pods startup instantly (in <5 seconds) loading the updated prompts from the mounted ConfigMap volume, bypassing the slow 5-10 minute container build/push pipeline.
+1. When a prompt or skill file in `app/skills` is modified, developers run `scripts/sync-skills.sh` to sync it to the Helm chart under `platform/helm/jobmatch/skills/` and commit.
+2. In the Deployment template, we calculate a SHA256 checksum of the ConfigMap template:
+   ```yaml
+   annotations:
+     checksum/config: {{ include (print $.Template.BasePath "/configmap-skills.yaml") . | sha256sum }}
+   ```
+3. When FluxCD reconciles, it detects the change in the files, updates the ConfigMap, and the checksum annotation changes.
+4. Kubernetes immediately triggers a **Rolling Update** of the API pods because the Pod template metadata spec changed.
+5. The new API pods start up instantly (in <5 seconds) loading the updated prompts from the mounted ConfigMap volume, bypassing the slow 5-10 minute container build/push pipeline.
+
