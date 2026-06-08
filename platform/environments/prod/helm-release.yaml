@@ -40,15 +40,15 @@ spec:
         limits:
           cpu: 200m
           memory: 128Mi
-    redis:
-      enabled: true
-      architecture: standalone
-      master:
-        persistence:
-          enabled: true
-          size: 5Gi
-    qdrant:
-      enabled: true
-      persistence:
-        enabled: true
-        size: 10Gi
+#    redis:
+#      enabled: true
+#      architecture: standalone
+#      master:
+#        persistence:
+#          enabled: true
+#          size: 5Gi
+#    qdrant:
+#      enabled: true
+#      persistence:
+#        enabled: true
+#        size: 10Gi
