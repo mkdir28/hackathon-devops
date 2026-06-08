@@ -100,4 +100,3 @@ node run-evals.mjs
 * 🔄 **[CI/CD & GitOps Guide](doc/cicd.md)** — Детальний опис налаштування FluxCD, тегування образів та автоматичного оновлення релізів.
 * 🏗️ **[Deployment Infrastructure Guide](doc/deployment_infrastructure.md)** — Стратегія розгортання для всіх середовищ (Dev, Staging, Prod), мережева топологія та забезпечення високої доступності.
 * 🗺️ **[Architecture Implementation Roadmap](doc/roadmap.md)** — Роадмап реалізації цільової архітектури, аналіз розбіжностей MVP та кроки впровадження БД/кешування.
-* 📋 **[Kanban Action Plan](doc/action_plan.md)** — Готовий план дій із завданнями для команди з 4 людей для наповнення канбан-дошки.
