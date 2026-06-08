@@ -84,14 +84,14 @@ spec:
   git:
     checkout:
       ref:
-        branch: main
+        branch: dev
     commit:
       author:
         email: fluxcdbot@users.noreply.github.com
         name: fluxcdbot
       messageTemplate: 'chore(gitops): auto-update image tags [skip ci]'
     push:
-      branch: main
+      branch: dev
   update:
-    path: ./platform/environments
+    path: ./platform/flux/clusters/local-dev/apps/jobmatch
     strategy: Setters
