@@ -131,6 +131,7 @@ async function openaiWebSearch(
     headers: {
       Authorization: `Bearer ${config.openaiApiKey}`,
       'Content-Type': 'application/json',
+      'Accept-Encoding': 'identity',
     },
     body: JSON.stringify({
       model: config.openaiModel,
