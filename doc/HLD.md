@@ -57,7 +57,7 @@ graph TB
 
 ## 2. CI/CD Пайплайн та GitOps Реліз-Процес
 
-Розгортання платформи здійснюється повністю декларативно за допомогою GitOps-контролера FluxCD.
+Розгортання платформи здійснюється повністю декларативно за допомогою GitOps-контролера FluxCD, розділеного на рівні окремих каталогів кластерів та відповідних гілок.
 
 ```mermaid
 sequenceDiagram
@@ -66,28 +66,33 @@ sequenceDiagram
     participant Git as GitHub (Git repo)
     participant CI as GitHub Actions
     participant Registry as GHCR (Container Registry)
-    participant Flux as FluxCD (in Cluster)
-    participant K8s as Kubernetes Cluster
+    participant DevCluster as Dev Cluster (Flux tracking 'dev')
+    participant ProdCluster as Prod Cluster (Flux tracking 'main')
 
-    Dev->>Git: Push to dev / main branch (PR merge)
-    Git->>CI: Trigger Workflow (deploy.yml)
-    CI->>CI: Run Linter & Unit Tests
-    CI->>CI: Run CI Gate: node run-evals.mjs (Evals)
-    alt Evals score >= baseline
-        CI->>CI: Build Docker Images (web & api)
-        CI->>Registry: Push container images with SHA tags
-    else Evals score < baseline
-        CI-->>Git: Fail Pipeline (Block Merge / Status check red)
-    end
-    Registry->>Flux: ImageRepository scans new tags
-    Flux->>Git: Auto-commit new image tag into platform/environments/<env>/helm-release.yaml
-    Git->>Flux: Sync Git state (Pull updated manifests)
-    Flux->>K8s: Reconcile HelmRelease (Rolling Update)
+    Dev->>Git: Push to dev branch
+    Git->>CI: Trigger Workflow (deploy.yml on dev)
+    CI->>CI: Run Linter, Unit Tests & Evals
+    CI->>Registry: Build & Push images (tag: v1.0.0-SHA, latest)
+    CI->>Git: Auto-commit updated tag to clusters/dev/.../helm-release.yaml
+    Git->>DevCluster: Reconcile (reconcileStrategy: Revision)
+    DevCluster->>DevCluster: Deploy to namespace jobmatch-dev
+
+    Note over Dev, ProdCluster: Просування на продакшен (Promotion)
+    Dev->>Git: Update tag in clusters/prod/.../helm-release.yaml on dev branch
+    Dev->>Git: Create PR from dev to main & Merge
+    Git->>ProdCluster: Reconcile (reconcileStrategy: Revision)
+    ProdCluster->>ProdCluster: Deploy to namespace jobmatch-prod
 ```
 
 ### Стратегія просування (Promotion Strategy):
-* **Гілка `dev`:** Націлена на середовище розробки `Development`. Пайплайн запускає лінтування, швидкі тести та збирає образ із тегом `*-dev`. FluxCD автоматично деплоїть його у dev namespace через `HelmRelease`.
-* **Гілка `main`:** Націлена на середовище `Production`. Повний прогін `eval-suite` (якість + безпека). У разі успіху збирається релізний образ, FluxCD оновлює прод-конфігурацію в `platform/environments/prod/helm-release.yaml`.
+* **Dev-кластер (Гілка `dev`):** Синхронізується з каталогом `platform/flux/clusters/dev`. При кожному пуші в `dev` GitHub Actions автоматично збирає контейнери з тегом `v1.0.0-<git-sha>` та за допомогою кроку автоматичного запису оновлює цей тег у `dev/apps/jobmatch/helm-release.yaml`.
+* **Prod-кластер (Гілка `main`):** Синхронізується з каталогом `platform/flux/clusters/prod`. Для доставки оновлень розробник оновлює тег у `prod/apps/jobmatch/helm-release.yaml` на перевірений у dev, створює Pull Request у `main` та зливає його після перевірки.
+
+### Безпека стратегії `reconcileStrategy: Revision`
+Обидва середовища використовують параметр `reconcileStrategy: Revision` у своїх `HelmRelease` ресурсах:
+1. **Швидкість доставки:** Це дозволяє Flux миттєво реагувати на будь-які комміти зі зміною тегів образів або налаштувань промптів без потреби підняття версії чарту в `Chart.yaml` при кожному релізі.
+2. **Безпека на продакшені:** Оскільки Prod-кластер відстежує виключно гілку `main`, будь-які зміни ревізій проходять жорсткий контроль через Pull Request та рев'ю коду перед застосуванням.
+3. **Автоматичний Rollback:** У разі невдалого старту подів (наприклад, збій конфігурації чи помилка образу), Flux автоматично виконає відкат (`rollback`) до попередньої стабільної ревізії.
 
 ---
 
