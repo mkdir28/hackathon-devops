@@ -19,9 +19,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Verify Skills Sync
+      - name: Sync and Verify Skills (Prompts)
         run: |
-          diff -r app/skills platform/helm/jobmatch/skills || (echo "ERROR: platform/helm/jobmatch/skills is out of sync with app/skills. Run scripts/sync-skills.sh and commit." && exit 1)
+          chmod +x scripts/sync-skills.sh
+          ./scripts/sync-skills.sh
+          if [ "${{ github.ref_name }}" != "dev" ]; then
+            if [ -n "$(git status --porcelain platform/helm/jobmatch/skills)" ]; then
+              echo "ERROR: platform/helm/jobmatch/skills is out of sync with app/skills. Please run ./scripts/sync-skills.sh locally and commit."
+              exit 1
+            fi
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -111,7 +118,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update Dev Image Tag in Git
+      - name: Update Dev Config and Tag in Git
         if: github.ref_name == 'dev'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -122,9 +129,11 @@ jobs:
           yq -i ".spec.values.api.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
           yq -i ".spec.values.web.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
           
-          # Commit and push
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
-          git commit -m "chore(gitops): update dev image tag to $TAG [skip ci]"
-          git push origin dev
+          # Commit and push both prompts and tag if there are any changes
+          if [ -n "$(git status --porcelain)" ]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml platform/helm/jobmatch/skills/
+            git commit -m "chore(gitops): auto-sync prompts and update dev image tag to $TAG [skip ci]"
+            git push origin dev
+          fi
