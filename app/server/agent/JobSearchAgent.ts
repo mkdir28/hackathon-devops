@@ -63,6 +63,7 @@ async function runBoardTool(
     return fromWeb;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error(`[agent] Error fetching board ${board.name} (${board.id}):`, err);
     logs.push({
       ...logBase,
       tool: board.parser === 'web-only' ? 'web_search_jobs' : 'fetch_job_board',

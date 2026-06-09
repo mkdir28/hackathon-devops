@@ -93,10 +93,15 @@ jobs:
           npm run typecheck --prefix app
 
       - name: Compile Backend Server (Required for Evals)
+        if: github.ref_name == 'main' && steps.analyze.outputs.prompts_changed == 'true'
         run: |
           npm run build:api --prefix app
 
       - name: Run Evals Quality Gate
+        if: github.ref_name == 'main' && steps.analyze.outputs.prompts_changed == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           npm test --prefix evals
 

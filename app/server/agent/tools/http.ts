@@ -14,6 +14,7 @@ export async function fetchHtml(
         'User-Agent': DEFAULT_UA,
         Accept: 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9,uk;q=0.8',
+        'Accept-Encoding': 'identity',
       },
       redirect: 'follow',
     });
