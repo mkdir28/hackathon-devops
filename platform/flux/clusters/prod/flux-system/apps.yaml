@@ -5,7 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m0s
-  path: ./platform/flux/clusters/gcp/infra
+  path: ./platform/flux/clusters/local-dev/infra
   prune: true
   sourceRef:
     kind: GitRepository
@@ -19,7 +19,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 2m0s
-  path: ./platform/flux/clusters/gcp/apps
+  path: ./platform/flux/clusters/local-dev/apps/jobmatch
   prune: true
   sourceRef:
     kind: GitRepository
@@ -33,7 +33,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./platform/flux/clusters/gcp/observability
+  path: ./platform/flux/clusters/local-dev/observability
   prune: true
   sourceRef:
     kind: GitRepository
