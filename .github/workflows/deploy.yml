@@ -72,13 +72,8 @@ jobs:
           SHA="${{ steps.sha.outputs.short }}"
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           
-          if [ "${{ github.ref_name }}" = "dev" ]; then
-            WEB_TAGS="ghcr.io/$OWNER/jobmatch-web:$VERSION-$SHA-dev"
-            API_TAGS="ghcr.io/$OWNER/jobmatch-api:$VERSION-$SHA-dev"
-          else
-            WEB_TAGS="ghcr.io/$OWNER/jobmatch-web:$VERSION-$SHA,ghcr.io/$OWNER/jobmatch-web:latest"
-            API_TAGS="ghcr.io/$OWNER/jobmatch-api:$VERSION-$SHA,ghcr.io/$OWNER/jobmatch-api:latest"
-          fi
+          WEB_TAGS="ghcr.io/$OWNER/jobmatch-web:$VERSION-$SHA,ghcr.io/$OWNER/jobmatch-web:latest"
+          API_TAGS="ghcr.io/$OWNER/jobmatch-api:$VERSION-$SHA,ghcr.io/$OWNER/jobmatch-api:latest"
           
           echo "web_tags=$WEB_TAGS" >> $GITHUB_OUTPUT
           echo "api_tags=$API_TAGS" >> $GITHUB_OUTPUT
