@@ -18,13 +18,52 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      - name: Sync and Verify Skills (Prompts)
+      - name: Analyze Changes
+        id: analyze
+        run: |
+          # Get list of changed files compared to previous commit
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD)
+          fi
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Initialize flags
+          CODE_CHANGED="false"
+          PROMPTS_CHANGED="false"
+          
+          for file in $CHANGED_FILES; do
+            if [[ $file == app/skills/* ]] || [[ $file == platform/helm/jobmatch/skills/* ]]; then
+              PROMPTS_CHANGED="true"
+            else
+              CODE_CHANGED="true"
+            fi
+          done
+          
+          echo "code_changed=$CODE_CHANGED" >> $GITHUB_OUTPUT
+          echo "prompts_changed=$PROMPTS_CHANGED" >> $GITHUB_OUTPUT
+          
+          echo "Code changed: $CODE_CHANGED"
+          echo "Prompts changed: $PROMPTS_CHANGED"
+
+      - name: Auto-Sync Skills (Prompts)
+        if: steps.analyze.outputs.prompts_changed == 'true'
         run: |
           chmod +x scripts/sync-skills.sh
           ./scripts/sync-skills.sh
-          if [ "${{ github.ref_name }}" != "dev" ]; then
-            if [ -n "$(git status --porcelain platform/helm/jobmatch/skills)" ]; then
+          if [ -n "$(git status --porcelain platform/helm/jobmatch/skills)" ]; then
+            if [ "${{ github.ref_name }}" = "dev" ]; then
+              git config --global user.name "github-actions[bot]"
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              git add platform/helm/jobmatch/skills
+              git commit -m "chore(gitops): auto-sync skills prompts from app/skills [skip ci]"
+              git push origin dev
+            else
               echo "ERROR: platform/helm/jobmatch/skills is out of sync with app/skills. Please run ./scripts/sync-skills.sh locally and commit."
               exit 1
             fi
@@ -99,6 +138,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & Push Frontend (Web)
+        if: steps.analyze.outputs.code_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./app
@@ -109,6 +149,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & Push Backend (API)
+        if: steps.analyze.outputs.code_changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./app
@@ -118,8 +159,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update Dev Config and Tag in Git
-        if: github.ref_name == 'dev'
+      - name: Update Dev Image Tag in Git
+        if: github.ref_name == 'dev' && steps.analyze.outputs.code_changed == 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA="${{ steps.sha.outputs.short }}"
@@ -129,11 +170,11 @@ jobs:
           yq -i ".spec.values.api.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
           yq -i ".spec.values.web.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
           
-          # Commit and push both prompts and tag if there are any changes
-          if [ -n "$(git status --porcelain)" ]; then
+          # Commit and push dev image tag update
+          if [ -n "$(git status --porcelain platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml)" ]; then
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml platform/helm/jobmatch/skills/
-            git commit -m "chore(gitops): auto-sync prompts and update dev image tag to $TAG [skip ci]"
+            git add platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
+            git commit -m "chore(gitops): update dev image tag to $TAG [skip ci]"
             git push origin dev
           fi
