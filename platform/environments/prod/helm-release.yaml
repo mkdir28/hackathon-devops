@@ -22,7 +22,7 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-c001f8a # {"$imagepolicy": "flux-system:jobmatch-api-prod"}
+        tag: v1.0.0-85d44bc # {"$imagepolicy": "flux-system:jobmatch-api-prod"}
       resources:
         requests:
           cpu: 100m
@@ -33,7 +33,7 @@ spec:
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-c001f8a # {"$imagepolicy": "flux-system:jobmatch-web-prod"}
+        tag: v1.0.0-85d44bc # {"$imagepolicy": "flux-system:jobmatch-web-prod"}
       resources:
         requests:
           cpu: 50m
