@@ -22,18 +22,8 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-c001f8a-dev
+        tag: v1.0.0-b381b19
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-c001f8a-dev
-#    redis:
-#      enabled: true
-#      architecture: standalone
-#      master:
-#        persistence:
-#          enabled: false
-#    qdrant:
-#      enabled: true
-#      persistence:
-#        enabled: false
+        tag: v1.0.0-b381b19

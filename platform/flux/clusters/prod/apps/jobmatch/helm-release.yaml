@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: ./platform/helm/jobmatch
-      reconcileStrategy: ChartVersion
+      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: flux-system
@@ -22,7 +22,7 @@ spec:
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-85d44bc # {"$imagepolicy": "flux-system:jobmatch-api-prod"}
+        tag: v1.0.0-b381b19
       resources:
         requests:
           cpu: 100m
@@ -33,7 +33,7 @@ spec:
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-85d44bc # {"$imagepolicy": "flux-system:jobmatch-web-prod"}
+        tag: v1.0.0-b381b19
       resources:
         requests:
           cpu: 50m
@@ -41,15 +41,3 @@ spec:
         limits:
           cpu: 200m
           memory: 128Mi
-#    redis:
-#      enabled: true
-#      architecture: standalone
-#      master:
-#        persistence:
-#          enabled: true
-#          size: 5Gi
-#    qdrant:
-#      enabled: true
-#      persistence:
-#        enabled: true
-#        size: 10Gi
