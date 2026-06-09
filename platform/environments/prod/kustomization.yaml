@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: jobmatch-prod
 
 resources:
+  - ns.yaml
   - helm-release.yaml
 
 labels:

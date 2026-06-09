@@ -2,12 +2,13 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: jobmatch-dev
-  namespace: jobmatch-local-dev
+  namespace: jobmatch-dev
 spec:
   interval: 5m
   chart:
     spec:
       chart: ./platform/helm/jobmatch
+      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: flux-system

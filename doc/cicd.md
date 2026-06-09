@@ -1,49 +1,48 @@
-# CI/CD Pipeline & GitOps Delivery
+# CI/CD Пайплайн та GitOps Доставка
 
-This document describes the CI/CD pipeline and GitOps delivery strategy for the **JobMatch** application, which is containerized and deployed to Kubernetes clusters managed by **FluxCD**.
+Цей документ описує CI/CD пайплайн та стратегію доставки GitOps для застосунку **стартап Scout**, який контейнеризований та розгортається у Kubernetes-кластерах під керуванням **FluxCD**.
 
 ---
 
-## Architecture Flow
+## Схема архітектури
 
 ```mermaid
 graph LR
-    Push[git push] -->|Trigger Workflow| GHA[GitHub Actions]
-    GHA -->|Build & Tag| Docker[Docker Buildx]
-    Docker -->|Publish| GHCR[GitHub Container Registry]
-    GHCR -->|Scan Registry| Flux[FluxCD Reflector]
-    Flux -->|Update manifest in Git| GitOps[GitOps Repo / Path]
-    GitOps -->|Deploy to Cluster| K8s[Kubernetes Cluster]
+    Push[git push] -->|Тригер workflow| GHA[GitHub Actions]
+    GHA -->|Побудова та тег| Docker[Docker Buildx]
+    Docker -->|Публікація| GHCR[GitHub Container Registry]
+    Developer[Розробник] -->|Ручне оновлення тегу в YAML| GitOps[GitOps Репозиторій]
+    GitOps -->|Синхронізація Flux| K8s[Kubernetes Кластер]
 ```
 
 ---
 
-## 1. Pipeline Trigger Strategy
-The GitHub Actions workflow resides at [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) and is triggered by commits to specific target branches:
-- **`dev` branch**: Builds and delivers to the **Development Environment** (`dev`).
-- **`main` branch**: Builds and delivers to the **Production Environment** (`prod`).
+## 1. Стратегія тригерів пайплайну
+Робочий процес GitHub Actions розміщений у [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) і запускається при коммітах у відповідні гілки:
+- **Гілка `dev`**: Збирає та доставляє образи для **Середовища розробки** (`dev`).
+- **Гілка `main`**: Збирає та доставляє образи для **Продакшен середовища** (`prod`).
 
 ---
 
-## 2. Container Registry & Artifact Names
-To maintain symmetry across environments, the exact same container image names are reused. Registry references are published to **GitHub Container Registry (GHCR)**:
-* **Frontend Service**: `ghcr.io/<repository-owner>/jobmatch-web`
-* **Backend API Service**: `ghcr.io/<repository-owner>/jobmatch-api`
+## 2. Реєстр контейнерів та назви артефактів
+Для збереження симетрії між середовищами використовуються однакові назви образів контейнерів. Образи публікуються в **GitHub Container Registry (GHCR)**:
+* **Фронтенд сервіс**: `ghcr.io/<repository-owner>/jobmatch-web`
+* **Бекенд API сервіс**: `ghcr.io/<repository-owner>/jobmatch-api`
 
 ---
 
-## 3. Image Versioning & Tagging Scheme
-The workflow dynamically extracts the core semantic version from the backend configuration ([app/server/package.json](../app/server/package.json)) and appends the short 7-character Git commit SHA.
+## 3. Схема версіонування та тегування образів
+Пайплайн динамічно витягує базову семантичну версію з конфігурації бекенду ([app/server/package.json](../app/server/package.json)) і додає короткий 7-символьний Git commit SHA.
 
-### A. Development Tagging (dev branch)
-Dev branch builds use the suffix `-dev` to isolate staging updates:
-* Format: `<version>-<short-sha>-dev`
+### А. Тегування для розробки (гілка `dev`)
+Збірки гілки `dev` використовують суфікс `-dev` для ізоляції тестових оновлень:
+* Формат: `<version>-<short-sha>-dev`
 * Web: `ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h-dev`
 * API: `ghcr.io/<owner>/jobmatch-api:v1.0.0-e5f6g7h-dev`
 
-### B. Production Tagging (main branch)
-Main branch builds write immutable SHA tags and advance the floating `latest` tag:
-* Format: `<version>-<short-sha>` and `latest`
+### Б. Тегування для продакшену (гілка `main`)
+Збірки гілки `main` використовують чисті версії та оновлюють плаваючий тег `latest`:
+* Формат: `<version>-<short-sha>` та `latest`
 * Web: 
   - `ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h`
   - `ghcr.io/<owner>/jobmatch-web:latest`
@@ -53,113 +52,51 @@ Main branch builds write immutable SHA tags and advance the floating `latest` ta
 
 ---
 
-## 4. FluxCD Integration Strategy
-To deploy the builds automatically using **FluxCD**, the cluster uses Flux's Image Automation controllers. 
+## 4. Стратегія інтеграції FluxCD (HelmRelease)
 
-### Step 1: Configure ImageRepository
-Tell FluxCD to scan GHCR for new tags:
-```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImageRepository
-metadata:
-  name: jobmatch-web
-  namespace: flux-system
-spec:
-  image: ghcr.io/<owner>/jobmatch-web
-  interval: 2m
-```
+Замість використання автоматичного оновлення образів через додаткові контролери Flux, доставка застосунку повністю базується на **декларативному описі в ресурсах HelmRelease** (оверлеї середовищ) з ручним оновленням тегів.
 
-### Step 2: Configure ImagePolicies
-Create distinct policies filtering tags based on target environments:
+### А. Структура каталогів GitOps
+Усі системні конфігурації Flux для кластера живуть у єдиній папці `platform/flux/clusters/k8s`. Ця папка підключається один раз при бутстрапі кластера.
 
-#### Development Environment Policy
-Scans for tags matching the `-dev` suffix:
-```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: jobmatch-web-dev
-  namespace: flux-system
-spec:
-  imageRepositoryRef:
-    name: jobmatch-web
-  policy:
-    numerical:
-      order: asc # Or regex filtering for *-dev
-```
+Різниця між оточеннями реалізована через оверлеї в каталозі `platform/environments/`:
+* **`platform/environments/dev/`** (неймспейс `jobmatch-dev`):
+  * `ns.yaml` — створює простір імен `jobmatch-dev`.
+  * `helm-release.yaml` — декларативно описує реліз `jobmatch-dev`, використовуючи dev-тег образу (`v1.0.0-c001f8a-dev`) та стратегію узгодження `reconcileStrategy: Revision`.
+* **`platform/environments/prod/`** (неймспейс `jobmatch-prod`):
+  * `ns.yaml` — створює простір імен `jobmatch-prod`.
+  * `helm-release.yaml` — декларативно описує реліз `jobmatch-prod` з продакшен-тегами та лімітами ресурсів.
 
-#### Production Environment Policy
-Scans only for clean semantic version tags (ignoring dev tags):
-```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: jobmatch-web-prod
-  namespace: flux-system
-spec:
-  imageRepositoryRef:
-    name: jobmatch-web
-  policy:
-    semver:
-      range: '>=1.0.0 <2.0.0' # Matches v1.0.0-e5f6g7h, excludes *-dev
-```
+Усі ці середовища паралельно запускаються за допомогою `kustomizations.yaml` (plural) у папці `platform/flux/clusters/k8s/apps/jobmatch/`.
 
-### Step 3: Configure ImageUpdateAutomation
-Flux automatically writes the updated tag back into the HelmRelease manifests (e.g. `platform/environments/dev/helm-release.yaml` or `platform/environments/prod/helm-release.yaml`) using setter markers:
-```yaml
-    api:
-      replicaCount: 1
-      image:
-        tag: v1.0.0-dev # {"$imagepolicy": "flux-system:jobmatch-api-dev"}
-```
-Once Flux commits the updated values to the repository, it reconciles the cluster state to match the manifest update.
+### Б. Переваги стратегії HelmRelease (ручне оновлення):
+1. **Контроль та стабільність:** Розробник або реліз-інженер чітко контролює, яка саме версія зараз деплоїться. Жодних автоматичних викатів сирих образів на прод.
+2. **Безпека репозиторію:** Flux не потребує прав на запис (Write-Access) у ваш репозиторій Git, оскільки йому не потрібно пушити оновлені теги. Достатньо прав Read-Only.
+3. **Простота просування змін (Promotion):** Перенесення змін з `dev` на `prod` відбувається шляхом простого копіювання перевіреного тегу образу з `environments/dev/helm-release.yaml` в `environments/prod/helm-release.yaml` і створення Pull Request. Оскільки конфігурації розділені за папками-оверлеями, виключається ризик випадкового перезапису прод-параметрів під час мержу гілок.
 
 ---
 
-## 5. Decoupled Prompt & Skill Delivery Strategy
+## 5. Декоплінг доставки промптів (PromptOps)
 
-To avoid rebuilding and pushing full container images when only system prompts or skills (e.g., `app/skills/**` or `app/prompts/**`) are changed, the following decoupled GitOps workflow is implemented:
+Щоб уникнути тривалого складання та пушу повних образів контейнерів при зміні лише системних промптів (файли в `app/skills/**`), реалізовано наступний робочий процес:
 
-### A. CI Path Filtering (GitHub Actions)
-In [.github/workflows/deploy.yml](../.github/workflows/deploy.yml), we configure path filters on the Docker build jobs. 
-* If only files in `app/skills/**` are changed, GHA **skips** the container build/push jobs.
-* If any source code files are changed (`app/server/**`, `app/src/**`, `app/package.json`), GHA triggers the full build & push.
+### А. Фільтрація шляхів у CI (GitHub Actions)
+У налаштуваннях пайплайну налаштовано фільтрацію шляхів. Якщо змінено лише файли в `app/skills/**`, етап збирання Docker-образів пропускається, що економить час та ресурси.
 
-### B. Local Helm ConfigMap Templates (GitOps)
-We package prompt/skill markdown files into a ConfigMap dynamically using Helm's `.Files.Glob` and `.Files.Get` template features in the local umbrella chart.
-In `platform/helm/jobmatch/templates/configmap-skills.yaml`:
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ include "jobmatch.fullname" . }}-skills
-data:
-  {{- range $path, $_ :=  .Files.Glob "skills/**/SKILL.md" }}
-  {{- $key := printf "%s.md" (dir $path | base) }}
-  {{ $key }}: |
-{{ $.Files.Get $path | indent 4 }}
-  {{- end }}
-```
+### Б. Динамічне пакування в ConfigMap
+Промпти автоматично пакуються в ConfigMap за допомогою Helm-шаблону `platform/helm/jobmatch/templates/configmap-skills.yaml` з використанням вбудованих функцій Helm `.Files.Glob` та `.Files.Get`. 
 
-In `platform/helm/jobmatch/templates/deployment-api.yaml`, we mount this ConfigMap into the `jobmatch-api` container at the configured `SKILLS_DIR` `/app/skills`:
+У `deployment-api.yaml` цей ConfigMap монтується в контейнер API як розділ:
 ```yaml
           volumeMounts:
             - name: skills-volume
-              mountPath: {{ .Values.api.env.SKILLS_DIR }}
-      volumes:
-        - name: skills-volume
-          configMap:
-            name: {{ include "jobmatch.fullname" . }}-skills
+              mountPath: /app/skills
 ```
 
-### C. Automatic Hot-Reloading / Rolling Updates
-1. When a prompt or skill file in `app/skills` is modified, developers run `scripts/sync-skills.sh` to sync it to the Helm chart under `platform/helm/jobmatch/skills/` and commit.
-2. In the Deployment template, we calculate a SHA256 checksum of the ConfigMap template:
-   ```yaml
-   annotations:
-     checksum/config: {{ include (print $.Template.BasePath "/configmap-skills.yaml") . | sha256sum }}
-   ```
-3. When FluxCD reconciles, it detects the change in the files, updates the ConfigMap, and the checksum annotation changes.
-4. Kubernetes immediately triggers a **Rolling Update** of the API pods because the Pod template metadata spec changed.
-5. The new API pods start up instantly (in <5 seconds) loading the updated prompts from the mounted ConfigMap volume, bypassing the slow 5-10 minute container build/push pipeline.
-
+### В. Автоматичний Rolling Update при зміні промптів
+У шаблоні Deployment прораховується контрольна сума ConfigMap:
+```yaml
+    annotations:
+      checksum/config: {{ include (print $.Template.BasePath "/configmap-skills.yaml") . | sha256sum }}
+```
+При будь-якій зміні промптів та наступному комміті, FluxCD оновлює ConfigMap, контрольна сума змінюється, і Kubernetes автоматично запускає **Rolling Update** для API-подів. Нові поди запускаються менш ніж за 5 секунд і одразу використовують оновлені промпти.
