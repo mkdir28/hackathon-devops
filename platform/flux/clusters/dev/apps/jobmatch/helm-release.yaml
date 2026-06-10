@@ -22,7 +22,7 @@ spec:
     api:
       replicaCount: 1
       image:
-        repository: ghcr.io/kylib4444/jobmatch-api
+        repository: ghcr.io/mkdir28/jobmatch-api
         tag: v1.0.0-8d90c35
     web:
       replicaCount: 1
