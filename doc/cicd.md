@@ -1,49 +1,42 @@
-# CI/CD Pipeline & GitOps Delivery
+# CI/CD Пайплайн та GitOps Доставка
 
-This document describes the CI/CD pipeline and GitOps delivery strategy for the **JobMatch** application, which is containerized and deployed to Kubernetes clusters managed by **FluxCD**.
+Цей документ описує CI/CD пайплайн та стратегію доставки GitOps для застосунку **стартап Scout**, який контейнеризований та розгортається у Kubernetes-кластерах під керуванням **FluxCD**.
 
 ---
 
-## Architecture Flow
+## Схема архітектури
 
 ```mermaid
 graph LR
-    Push[git push] -->|Trigger Workflow| GHA[GitHub Actions]
-    GHA -->|Build & Tag| Docker[Docker Buildx]
-    Docker -->|Publish| GHCR[GitHub Container Registry]
-    GHCR -->|Scan Registry| Flux[FluxCD Reflector]
-    Flux -->|Update manifest in Git| GitOps[GitOps Repo / Path]
-    GitOps -->|Deploy to Cluster| K8s[Kubernetes Cluster]
+    Push[git push] -->|Тригер workflow| GHA[GitHub Actions]
+    GHA -->|Побудова та тег| Docker[Docker Buildx]
+    Docker -->|Публікація| GHCR[GitHub Container Registry]
+    Developer[Розробник] -->|Ручне оновлення тегу в YAML| GitOps[GitOps Репозиторій]
+    GitOps -->|Синхронізація Flux| K8s[Kubernetes Кластер]
 ```
 
 ---
 
-## 1. Pipeline Trigger Strategy
-The GitHub Actions workflow resides at [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) and is triggered by commits to specific target branches:
-- **`dev` branch**: Builds and delivers to the **Development Environment** (`dev`).
-- **`main` branch**: Builds and delivers to the **Production Environment** (`prod`).
+## 1. Стратегія тригерів пайплайну
+Робочий процес GitHub Actions розміщений у [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) і запускається при коммітах у відповідні гілки:
+- **Гілка `dev`**: Збирає та доставляє образи для **Середовища розробки** (`dev`).
+- **Гілка `main`**: Збирає та доставляє образи для **Продакшен середовища** (`prod`).
 
 ---
 
-## 2. Container Registry & Artifact Names
-To maintain symmetry across environments, the exact same container image names are reused. Registry references are published to **GitHub Container Registry (GHCR)**:
-* **Frontend Service**: `ghcr.io/<repository-owner>/jobmatch-web`
-* **Backend API Service**: `ghcr.io/<repository-owner>/jobmatch-api`
+## 2. Реєстр контейнерів та назви артефактів
+Для збереження симетрії між середовищами використовуються однакові назви образів контейнерів. Образи публікуються в **GitHub Container Registry (GHCR)**:
+* **Фронтенд сервіс**: `ghcr.io/<repository-owner>/jobmatch-web`
+* **Бекенд API сервіс**: `ghcr.io/<repository-owner>/jobmatch-api`
 
 ---
 
-## 3. Image Versioning & Tagging Scheme
-The workflow dynamically extracts the core semantic version from the backend configuration ([app/server/package.json](../app/server/package.json)) and appends the short 7-character Git commit SHA.
+## 3. Схема версіонування та тегування образів
+Пайплайн динамічно витягує базову семантичну версію з конфігурації бекенду ([app/server/package.json](../app/server/package.json)) і додає короткий 7-символьний Git commit SHA.
 
-### A. Development Tagging (dev branch)
-Dev branch builds use the suffix `-dev` to isolate staging updates:
-* Format: `<version>-<short-sha>-dev`
-* Web: `ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h-dev`
-* API: `ghcr.io/<owner>/jobmatch-api:v1.0.0-e5f6g7h-dev`
-
-### B. Production Tagging (main branch)
-Main branch builds write immutable SHA tags and advance the floating `latest` tag:
-* Format: `<version>-<short-sha>` and `latest`
+### А. Уніфіковане тегування контейнерів
+Для забезпечення ідентичності образів та спрощення просування змін, збірки з обох гілок (`dev` та `main`) використовують єдиний формат тегування:
+* Формат: `<version>-<short-sha>` та `latest`
 * Web: 
   - `ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h`
   - `ghcr.io/<owner>/jobmatch-web:latest`
@@ -53,60 +46,64 @@ Main branch builds write immutable SHA tags and advance the floating `latest` ta
 
 ---
 
-## 4. FluxCD Integration Strategy
-To deploy the builds automatically using **FluxCD**, the cluster uses Flux's Image Automation controllers. 
+## 4. Стратегія інтеграції FluxCD (HelmRelease)
 
-### Step 1: Configure ImageRepository
-Tell FluxCD to scan GHCR for new tags:
+Замість використання автоматичного оновлення образів через додаткові контролери Flux, доставка застосунку повністю базується на **декларативному описі в ресурсах HelmRelease** (оверлеї середовищ) з ручним оновленням тегів.
+
+### А. Структура каталогів GitOps та розподіл за гілками
+Конфігурації для кожного кластера повністю відокремлені на рівні файлової структури та Git-гілок:
+
+* **Dev-кластер (гілка розробки `dev`)**:
+  * Синхронізується з папки: `platform/flux/clusters/dev/`
+  * Конфігураційні файли застосунку розміщені безпосередньо в `platform/flux/clusters/dev/apps/jobmatch/`.
+  * `ns.yaml` — створює простір імен `jobmatch-dev`.
+  * `helm-release.yaml` — декларативно описує реліз `jobmatch-dev` для розробки.
+  * Усі зміни на гілці `dev` автоматично деплояться на dev-кластер.
+
+* **Prod-кластер (продуктова гілка `main`)**:
+  * Синхронізується з папки: `platform/flux/clusters/prod/`
+  * Конфігураційні файли застосунку розміщені в `platform/flux/clusters/prod/apps/jobmatch/`.
+  * `ns.yaml` — створює простір імен `jobmatch-prod`.
+  * `helm-release.yaml` — декларативно описує реліз `jobmatch-prod` з прод-лімітами ресурсів та кількістю реплік.
+  * Зміни застосовуються тільки після злиття Pull Request у гілку `main`.
+
+### Б. Переваги та процес просування змін (Promotion):
+1. **Контроль та безпека (PR-based CD):** Будь-які зміни конфігурації продакшену (оновлення образів, лімітів чи промптів) спочатку проходять стадію Pull Request у гілку `main`. Лише після схвалення та злиття PR, Flux на prod-кластері автоматично оновлює застосунок.
+2. **Простота просування змін:** Щоб перенести перевірену версію образу з розробки на продакшен, ви копіюєте тег образу з `clusters/dev/apps/jobmatch/helm-release.yaml` у `clusters/prod/apps/jobmatch/helm-release.yaml` на гілці `dev`, створюєте PR у `main` та мержите його.
+3. **Ізоляція оточень:** Оскільки конфігурації лежать в окремих папках кластерів, виключається будь-яка ймовірність затерти налаштування продакшену під час мержу загальних змін коду застосунку з `dev` у `main`.
+
+---
+
+## 5. Декоплінг доставки промптів (PromptOps)
+
+Щоб уникнути тривалого складання та пушу повних образів контейнерів при зміні лише системних промптів (файли в `app/skills/**`), реалізовано наступний робочий процес:
+
+### А. Фільтрація шляхів у CI (GitHub Actions)
+У налаштуваннях пайплайну налаштовано фільтрацію шляхів. Якщо змінено лише файли в `app/skills/**`, етап збирання Docker-образів пропускається, що економить час та ресурси.
+
+### Б. Динамічне пакування в ConfigMap
+Промпти автоматично пакуються в ConfigMap за допомогою Helm-шаблону `platform/helm/jobmatch/templates/configmap-skills.yaml` з використанням вбудованих функцій Helm `.Files.Glob` та `.Files.Get`. 
+
+У `deployment-api.yaml` цей ConfigMap монтується в контейнер API як розділ:
 ```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImageRepository
-metadata:
-  name: jobmatch-web
-  namespace: flux-system
-spec:
-  image: ghcr.io/<owner>/jobmatch-web
-  interval: 2m
+          volumeMounts:
+            - name: skills-volume
+              mountPath: /app/skills
 ```
 
-### Step 2: Configure ImagePolicies
-Create distinct policies filtering tags based on target environments:
-
-#### Development Environment Policy
-Scans for tags matching the `-dev` suffix:
+### В. Автоматичний Rolling Update при зміні промптів
+У шаблоні Deployment прораховується контрольна сума ConfigMap:
 ```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: jobmatch-web-dev
-  namespace: flux-system
-spec:
-  imageRepositoryRef:
-    name: jobmatch-web
-  policy:
-    numerical:
-      order: asc # Or regex filtering for *-dev
+    annotations:
+      checksum/config: {{ include (print $.Template.BasePath "/configmap-skills.yaml") . | sha256sum }}
 ```
+При будь-якій зміні промптів та наступному комміті, FluxCD оновлює ConfigMap, контрольна сума змінюється, і Kubernetes автоматично запускає **Rolling Update** для API-подів. Нові поди запускаються менш ніж за 5 секунд і одразу використовують оновлені промпти.
 
-#### Production Environment Policy
-Scans only for clean semantic version tags (ignoring dev tags):
-```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: jobmatch-web-prod
-  namespace: flux-system
-spec:
-  imageRepositoryRef:
-    name: jobmatch-web
-  policy:
-    semver:
-      range: '>=1.0.0 <2.0.0' # Matches v1.0.0-e5f6g7h, excludes *-dev
-```
+### Г. Автоматична валідація якості (Evals Quality Gate)
+Для гарантії того, що зміна промптів чи скілів не погіршить роботу AI-агента та не відкриє нових вразливостей (наприклад, Prompt Injection), у пайплайн інтегровано контур автоматичної оцінки.
+* **Умова запуску:** Запускається тільки на гілці `main` при злитті змін (Pull Request) та за наявності змінених файлів у директоріях `app/skills/*` або `platform/helm/jobmatch/skills/*`.
+* **Залежності та секрети:** Для реальної оцінки використовуються прокинуті секрети `OPENAI_API_KEY` та `GEMINI_API_KEY`.
+* **Принцип блокування (Quality Gate):** Якщо середня оцінка тест-кейсів за критеріями LLM-as-a-Judge виявиться нижчою за **4.2 / 5.0**, або якщо буде провалено хоча б один критичний тест на Prompt Injection чи безпеку, пайплайн завершиться з помилкою (exit 1), блокуючи збірку та оновлення продуктової інфраструктури.
 
-### Step 3: Configure ImageUpdateAutomation
-Flux automatically writes the updated tag back into the YAML manifests (e.g. `k8s/dev/deployment.yaml` or `k8s/prod/deployment.yaml`) using a marker:
-```yaml
-image: ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h-dev # {"$imagepolicy": "flux-system:jobmatch-web-dev"}
-```
-Once Flux commits the updated values to the repository, it reconciles the cluster state to match the manifest update.
+Детальний опис тестових сценаріїв та логіки роботи див. у [eval.md](./eval.md).
+

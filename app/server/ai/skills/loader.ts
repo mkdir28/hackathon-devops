@@ -65,10 +65,15 @@ export function loadAllSkills(): AgentSkill[] {
   }
   const skills: AgentSkill[] = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const skillFile = path.join(root, entry.name, 'SKILL.md');
-    if (fs.existsSync(skillFile)) {
-      skills.push(parseSkillMarkdown(skillFile, entry.name));
+    if (entry.isDirectory()) {
+      const skillFile = path.join(root, entry.name, 'SKILL.md');
+      if (fs.existsSync(skillFile)) {
+        skills.push(parseSkillMarkdown(skillFile, entry.name));
+      }
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      const skillFile = path.join(root, entry.name);
+      const id = entry.name.replace(/\.md$/, '');
+      skills.push(parseSkillMarkdown(skillFile, id));
     }
   }
   cache = skills;
