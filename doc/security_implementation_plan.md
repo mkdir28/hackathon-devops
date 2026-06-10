@@ -148,7 +148,7 @@ graph TD
 
 ---
 
-### 4. Автоматична перевірка безпеки Skills у CI/CD
+### 4. Автоматична перевірка безпеки у CI/CD (Skills Scanner & Gitleaks)
 
 #### [NEW] [check-skills-security.mjs](../scripts/check-skills-security.mjs)
 * Створити скрипт статичного аналізу файлів промптів у папках `app/skills/` та `app/prompts/`:
@@ -158,6 +158,14 @@ graph TD
   * Повертає `exit 1` у разі виявлення ризиків безпеки.
 
 #### [MODIFY] [deploy.yml](../.github/workflows/deploy.yml)
+* Додати крок `Run Gitleaks Scan` на самому початку пайплайну для перевірки всіх коммітів на наявність секретів:
+  ```yaml
+        - name: Run Gitleaks Scan
+          uses: gitleaks/gitleaks-action@v2
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ```
+  Цей крок сканує всю історію змін поточного пушу. Якщо виявлено захардкоджені секрети (паролі, приватні ключі, API-токени), пайплайн автоматично падає з помилкою (exit 1), блокуючи подальшу збірку та деплой.
 * Додати крок `Run Skills Security Check` у пайплайн GitHub Actions, який автоматично запускається при зміні промптів:
   ```yaml
         - name: Run Skills Security Check
@@ -171,6 +179,7 @@ graph TD
 ## Verification Plan
 
 ### Automated Tests
+* **Gitleaks Scan**: Запустити локально сканування `gitleaks detect` (якщо встановлено gitleaks CLI) або перевірити роботу кроку у GitHub Actions при тестовому пуші.
 * **CI Scanner**: Запустити `node scripts/check-skills-security.mjs` локально та перевірити його реакцію на тестовий комміт із захардкодженим API-ключем.
 * **Prompt Injection**: Перевірити проходження тесту `tc-003` у `evals/` після додавання XML-тегування.
 * **PII Masking**: Створити тест на заміну контактних даних у резюме.
