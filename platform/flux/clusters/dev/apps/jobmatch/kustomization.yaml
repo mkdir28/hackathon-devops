@@ -3,3 +3,9 @@ kind: Kustomization
 resources:
   - ns.yaml
   - helm-release.yaml
+  - external-secret.yaml
+
+labels:
+  - includeSelectors: true
+    pairs:
+      environment: development
