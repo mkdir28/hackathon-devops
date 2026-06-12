@@ -50,3 +50,4 @@ coverage
 .pnpm-debug.log*
 package-lock.json.tmp
 yarn.lock.tmp
+flux-deploy-key
