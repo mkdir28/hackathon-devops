@@ -24,6 +24,9 @@ spec:
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
         tag: "v1.0.0-d30ec1b"
+      env:
+        - name: DEBUG
+          value: "abox:*,kagent:*,ai:*"
     web:
       replicaCount: 1
       image:
