@@ -35,4 +35,4 @@ spec:
         name: system-prompt-protection
     backendRefs:
     - name: jobmatch-prod-api
-      port: 8080
+      port: 3001
