@@ -23,8 +23,7 @@ spec:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
-        tag: "v1.0.0-d30ec1b"
-# ZERO TRUST authorization for API
+        tag: "v1.0.0-93d0ee9"
       env:
         LLM_PROVIDER: "gemini"
         SKILLS_DIR: "/app/skills"
@@ -37,7 +36,7 @@ spec:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-web
-        tag: "v1.0.0-d30ec1b"
+        tag: "v1.0.0-93d0ee9"
     redis:
       enabled: true
       image:
