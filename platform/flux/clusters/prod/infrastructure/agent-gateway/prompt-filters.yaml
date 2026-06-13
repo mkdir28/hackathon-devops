@@ -12,3 +12,8 @@ spec:
   mcpServers:
     - name: jobmatch-context-mcp
       namespace: jobmatch-prod
+  #Add keys on gateway level
+  providerCredentials:
+        gemini:
+          secretKeyRef:
+            name: llm-secrets
