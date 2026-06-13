@@ -24,9 +24,15 @@ spec:
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
         tag: "v1.0.0-d30ec1b"
+# ZERO TRUST authorization for API
       env:
-        - name: DEBUG
-          value: "abox:*,kagent:*,ai:*"
+        LLM_PROVIDER: "gemini"
+        SKILLS_DIR: "/app/skills"
+        DEBUG: "abox:*,kagent:*,ai:*"
+# 1. Instead of real secretKeyRef, inserting fake token:
+        GEMINI_API_KEY: "LOCAL_GATEWAY_MANAGED_TOKEN"
+# 2. Forward SDK to local Agent Gateway port 3001: 
+        GEMINI_API_BASE_URL: "http://agent-gateway.jobmatch-dev.svc.cluster.local:3001/v1alpha1"
     web:
       replicaCount: 1
       image:
