@@ -16,7 +16,7 @@
 kubectl run curl-test -n jobmatch-dev --image=curlimages/curl --rm -it --restart=Never -- \
   curl -s -X POST "http://agentgateway-external.agentgateway-system.svc.cluster.local/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -d '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"Hi , My name is Peter, my email is peter@google.com, phone number is : +380111234567"}]}'
+  -d '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"Hi , My name is Peter, my email is peter@google.com, phone number is : +380990000000"}]}'
 ```
 
 ---

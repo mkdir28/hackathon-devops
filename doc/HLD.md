@@ -21,12 +21,12 @@ graph TD
     end
 
     subgraph "Platform Security (agentgateway-system)"
-        AIClient -->|4. OpenAI API protocol request| AGW[AgentGateway]
+        AIClient -->|4. Request with x-gateway-task-name header| AGW[AgentGateway]
         AGW -->|5. PII Masking & Prompt Guard| AGW
         Secret[("claude-auth-secret / gemini-auth-secret")] -->|6. Inject API Keys| AGW
     end
 
-    AGW -->|7. Forward request with model override| LLM["Anthropic Claude / Google Gemini"]
+    AGW -->|7. Route based on task type to Gemini or Claude| LLM["Anthropic Claude / Google Gemini"]
     LLM -->|8. Structured Job Score JSON| AGW
     AGW -->|9. Forward response| API
     API -->|10. Return ranked job list| UI
@@ -45,12 +45,12 @@ graph TD
         API -->|"2. Delegate matching task (A2A)"| KA["kagent (Declarative jobmatch-agent)"]
         KA -->|3. Vector query CV / vacancies| MCP[Remote MCP Server]
         MCP -->|4. Query cosine similarity| DB[("Qdrant Vector DB")]
-        KA -->|5. Forward reasoning prompt| AGW[AgentGateway]
+        KA -->|5. Forward reasoning prompt with x-gateway-task-name| AGW[AgentGateway]
     end
 
     subgraph "Platform Security (agentgateway-system)"
         AGW -->|6. Redact PII & Filter injection| AGW
-        AGW -->|7. Forward request with secrets| LLM["Anthropic / Google Gemini"]
+        AGW -->|7. Route based on task type & forward request| LLM["Anthropic / Google Gemini"]
     end
 
     LLM -->|8. Response| KA
@@ -64,7 +64,7 @@ graph TD
 1. **React/Vite Frontend (Web):** Клієнтська частина для завантаження резюме та введення пошукових запитів.
 2. **Backend API (Express):** Обробляє запити, запускає локальні парсери/скрапери вакансій (Фаза 1) та перенаправляє завдання агентам kagent через A2A (Фаза 2).
 3. **AI Client Layer ([AIClient.ts](../app/server/ai/AIClient.ts)):** Уніфікований клієнт, що перенаправляє всі LLM запити на `AgentGateway`.
-4. **Agent Gateway ([AgentGateway](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)):** Envoy-посередник для фільтрації Prompt Injection, маскування персональних даних (PII, як-от Email, телефони, SSN, посилання на LinkedIn/GitHub) та динамічного FinOps роутингу (зокрема, перенаправлення простих завдань на дешеві моделі).
+4. **Agent Gateway ([AgentGateway](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)):** Envoy-посередник для фільтрації Prompt Injection, маскування персональних даних (PII, як-от Email, телефони, SSN, посилання на LinkedIn/GitHub) та динамічного FinOps роутингу на основі типу задачі (через HTTP-заголовок `x-gateway-task-name`, який спрямовує `job_match` на дешеві моделі Gemini, а `cv_extract` — на Claude).
 5. **Declarative Agent (jobmatch-agent) (Фаза 2):** Спеціалізоване середовище виконання kagent для обробки промптів та взаємодії з MCP.
 6. **Memory (MCP + Qdrant) (Фаза 2):** MCP-сервер для семантичного пошуку збігів у векторній базі даних Qdrant.
 
