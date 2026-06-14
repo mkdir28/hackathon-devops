@@ -1,0 +1,53 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: model-routing-policy
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-external
+  traffic:
+    phase: PreRouting
+    transformation:
+      request:
+        set:
+          - name: x-gateway-model-name
+            value: "json(request.body).model"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jobmatch-llm-security-policy
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agentgateway-external
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - regex:
+              action: Mask
+              builtins:
+                - Email
+                - PhoneNumber
+                - Ssn
+              matches:
+                - ".*github\\.com/.*"
+                - ".*linkedin\\.com/.*"
+                - "(?i)(?:my name is|name is)\\s+[a-zA-Z]+"
+          - regex:
+              action: Reject
+              matches:
+                - "(?i).*ignore previous instructions.*"
+                - "(?i).*system prompt.*"
+            response:
+              message: "The request was rejected due to safety policy violations (Prompt Injection detected)."
+      prompt:
+        prepend:
+          - role: system
+            content: "You are a secure SRE and DevOps job matching system. Follow strictly matching rules."

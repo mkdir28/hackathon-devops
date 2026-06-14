@@ -15,6 +15,13 @@ export function createAIClient(): AIClient {
     return new DemoAIClient();
   }
 
+  if (process.env.GATEWAY_URL) {
+    const gatewayBaseURL = process.env.GATEWAY_URL.endsWith('/v1')
+      ? process.env.GATEWAY_URL
+      : `${process.env.GATEWAY_URL}/v1`;
+    return new OpenAIProvider(resolved.model, gatewayBaseURL);
+  }
+
   switch (resolved.provider) {
     case 'openai':
       return new OpenAIProvider(resolved.model);

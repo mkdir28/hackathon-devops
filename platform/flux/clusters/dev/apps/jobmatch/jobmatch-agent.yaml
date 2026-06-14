@@ -1,0 +1,58 @@
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: jobmatch-model-config
+  namespace: kagent
+spec:
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  model: gpt-4o-mini
+  provider: OpenAI
+  openAI:
+    baseUrl: "http://agentgateway-external.agentgateway-system.svc.cluster.local/v1"
+---
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: jobmatch-agent
+  namespace: kagent
+spec:
+  declarative:
+    deployment:
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+    modelConfig: jobmatch-model-config
+    runtime: python
+    systemMessage: |
+      # Scout AI Job Search Agent System Prompt
+
+      You are Scout, an advanced SRE and DevOps career matching agent. Your goal is to process the user's CV and find the best SRE, DevOps, Cloud, and Platform engineering jobs.
+
+      ## Guidelines
+
+      1. Parse candidate profiles and identify key SRE/DevOps skills (Kubernetes, CI/CD, AWS, Terraform, Python/Go, Monitoring).
+      2. Call the matching tools to query the job board database or execute web searches.
+      3. Grade the relevance of each vacancy on a scale from 1 to 5.
+      4. Avoid sharing candidate's personal data (PII) with untrusted resources.
+
+      ## Available Tools
+      - `search_jobs`: Search matching job vacancies.
+      - `tailor_cv`: Analyze and optimize CV for a specific vacancy.
+      - `draft_cover_letter`: Draft a customized cover letter for the candidate.
+    tools:
+    - mcpServer:
+        apiGroup: kagent.dev
+        kind: RemoteMCPServer
+        name: jobmatch-mcp-server
+        toolNames:
+        - search_jobs
+        - tailor_cv
+        - draft_cover_letter
+      type: McpServer
+  description: "Scout SRE & DevOps Job Search AI Agent"
+  type: Declarative

@@ -7,21 +7,22 @@ const openaiKey = process.env.OPENAI_API_KEY || '';
 function detectProvider(): LlmProviderId | null {
   const forced = (process.env.LLM_PROVIDER || 'auto').toLowerCase();
   if (forced === 'demo') return null;
-  if (forced === 'openai' && openaiKey) return 'openai';
-  if (forced === 'gemini' && geminiKey) return 'gemini';
-  if (forced === 'claude' && anthropicKey) return 'claude';
+  if (forced === 'openai' && (openaiKey || process.env.GATEWAY_URL)) return 'openai';
+  if (forced === 'gemini' && (geminiKey || process.env.GATEWAY_URL)) return 'gemini';
+  if (forced === 'claude' && (anthropicKey || process.env.GATEWAY_URL)) return 'claude';
   if (forced !== 'auto') {
-    console.warn(`[config] LLM_PROVIDER=${forced} but matching API key is missing`);
+    console.warn(`[config] LLM_PROVIDER=${forced} but matching API key or GATEWAY_URL is missing`);
     return null;
   }
   if (anthropicKey) return 'claude';
   if (geminiKey) return 'gemini';
   if (openaiKey) return 'openai';
+  if (process.env.GATEWAY_URL) return 'openai';
   return null;
 }
 
 const detectedProvider = detectProvider();
-const hasLlmApiKey = Boolean(anthropicKey || geminiKey || openaiKey);
+const hasLlmApiKey = Boolean(anthropicKey || geminiKey || openaiKey || process.env.GATEWAY_URL);
 const llmProviderForcedDemo = (process.env.LLM_PROVIDER || '').toLowerCase() === 'demo';
 /** Demo only when no LLM API key is set (or LLM_PROVIDER=demo). */
 const demoMode = llmProviderForcedDemo || !hasLlmApiKey;

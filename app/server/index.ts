@@ -10,6 +10,7 @@ import { loadJobBoardCatalog } from './agent/boards.js';
 import { webSearchBackend } from './agent/tools/web-search.js';
 import filesRoutes from './routes/files.js';
 import jobsRoutes from './routes/jobs.js';
+// import mcpRoutes from './routes/mcp.js';
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/files', filesRoutes);
 app.use('/api/cv', filesRoutes);
 app.use('/api/jobs', jobsRoutes);
+// app.use('/mcp', mcpRoutes);
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
