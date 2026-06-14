@@ -44,6 +44,10 @@ export class OpenAIProvider implements AIClient {
             },
           }
         : { type: 'json_object' },
+    }, {
+      headers: {
+        'x-gateway-task-name': request.task,
+      }
     });
 
     const text = response.choices[0]?.message?.content;

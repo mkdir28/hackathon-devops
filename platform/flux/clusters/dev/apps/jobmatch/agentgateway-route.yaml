@@ -7,18 +7,17 @@ spec:
   parentRefs:
     - name: agentgateway-external
   rules:
-    # 1. Роутинг дешевих задач на Gemini backend
+    # 1. Simple matching tasks (job_match) -> cheep model
     - matches:
         - headers:
-            - name: x-gateway-model-name
-              value: ".*(gemini|mini|flash).*"
-              type: RegularExpression
+            - name: x-gateway-task-name
+              value: "job_match"
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: gemini-backend
           port: 443
-    # 2. Роутинг дорогих завдань за замовчуванням (Claude)
+    # 2. Complex tasks or by default -> expensive model
     - backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
