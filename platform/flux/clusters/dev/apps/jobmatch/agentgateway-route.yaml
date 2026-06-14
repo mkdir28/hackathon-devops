@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-router
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-external
+  rules:
+    # 1. Роутинг дешевих задач на Gemini backend
+    - matches:
+        - headers:
+            - name: x-gateway-model-name
+              value: ".*(gemini|mini|flash).*"
+              type: RegularExpression
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: gemini-backend
+          port: 443
+    # 2. Роутинг дорогих завдань за замовчуванням (Claude)
+    - backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: claude-backend
+          port: 443

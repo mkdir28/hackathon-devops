@@ -6,52 +6,67 @@
 
 ## 1. Архітектурна діаграма системи (System Architecture)
 
-Нижче наведено огляд основних компонентів платформи та їхніх зв'язків.
+Для забезпечення безпеки, FinOps контролю та масштабованості архітектура впроваджується у два етапи:
+
+### Фаза 1: Інтеграція Agent Gateway (Поточний стан)
+Локальний збір та оркестрація пошуку вакансій ([JobSearchAgent.ts](../app/server/agent/JobSearchAgent.ts)) залишаються на Node.js API сервері, але всі запити до LLM проксіюються через **AgentGateway** (на базі Envoy). Шлюз виконує анонімізацію даних (PII), фільтрує ін'єкції промптів та інжектує API-ключі.
 
 ```mermaid
-graph TB
-    subgraph Client_Layer
-        Web[React / Vite SPA]
+graph TD
+    UI["React Frontend / Web UI"] -->|1. Upload CV & Search Query| API[jobmatch-api Pod]
+    
+    subgraph "Application Backend (jobmatch-dev)"
+        API -->|2. Scrape job boards locally| Scrapers[Job Boards Scrapers]
+        API -->|3. Route LLM scoring requests| AIClient[AIClient.ts]
     end
 
-    subgraph API_Application_Layer
-        API[Express API Server]
-        Agent[JobSearchAgent Harness]
-        AIClient[AI Client Abstraction Layer]
+    subgraph "Platform Security (agentgateway-system)"
+        AIClient -->|4. OpenAI API protocol request| AGW[AgentGateway]
+        AGW -->|5. PII Masking & Prompt Guard| AGW
+        Secret[("claude-auth-secret / gemini-auth-secret")] -->|6. Inject API Keys| AGW
     end
 
-    subgraph "Prompt & Skill Registry (Git-tracked)"
-        Prompts[(Prompts: system/user templates)]
-        Skills[(Skills: SKILL.md markdown files)]
-    end
-
-    subgraph Infrastructure_Integrations
-        MCP[MCP Server Proxy / Tools]
-        Cache[(Vector DB / Redis Cache)]
-        External[Job Boards / APIs]
-    end
-
-    %% Flow
-    Web -->|Uploads CV & Query| API
-    API -->|Load Prompts & active Skills| Prompts
-    API -->|Load Skills| Skills
-    API -->|Invoke Agent| Agent
-    Agent -->|Select tools & boards| MCP
-    Agent -->|Routing requests| AIClient
-    MCP -->|Fetch & Scrape| External
-    MCP -->|Query cache / Match| Cache
-    AIClient -->|Call API| Claude[Anthropic API]
-    AIClient -->|Call API| Gemini[Google Gemini API]
-    AIClient -->|Call API| OpenAI[OpenAI API]
+    AGW -->|7. Forward request with model override| LLM["Anthropic Claude / Google Gemini"]
+    LLM -->|8. Structured Job Score JSON| AGW
+    AGW -->|9. Forward response| API
+    API -->|10. Return ranked job list| UI
 ```
 
-### Основні компоненти:
-1. **React/Vite Frontend (Web):** Клієнтська частина для завантаження резюме (PDF/TXT) та введення пошукових запитів.
-2. **Express API Server (app/server):** Точка входу для запитів, яка виконує пре-процесинг (маскування PII), завантажує необхідні системні промпти та `SKILL.md` файли, та ініціює роботу Агента.
-3. **JobSearchAgent Harness (Harness):** Керує циклом мислення агента (Agent Loop), здійснює виклики інструментів (tools), отримує вакансії та передає їх на фінальний скоринг/синтез.
-4. **AIClient (Providers):** Агностичний шар інтеграції з LLM (OpenAI, Gemini, Anthropic), який обробляє повторні спроби (retry), тайм-аути та роутинг.
-5. **Git-tracked Prompts & Skills:** Системні промпти для різних ролей та скіли, які зберігаються у репозиторії та оновлюються через Pull Requests.
-6. **Vector DB / Redis Cache:** Забезпечує семантичний пошук по профілях кандидатів та кешування результатів збору вакансій для економії токенів (FinOps).
+---
+
+### Фаза 2: Декларативний Агент та Векторна БД (Цільова архітектура)
+Локальна логіка оркестрації повністю вилучається з API-сервера та переноситься у декларативні под-агенти **kagent**, які взаємодіють з віддаленими серверами **MCP** для векторизації та семантичного пошуку у **Qdrant Vector DB**.
+
+```mermaid
+graph TD
+    UI["React Frontend / Web UI"] -->|1. Upload CV & Search Query| API[jobmatch-api Pod]
+    
+    subgraph "Agentic Pods (kagent namespace)"
+        API -->|"2. Delegate matching task (A2A)"| KA["kagent (Declarative jobmatch-agent)"]
+        KA -->|3. Vector query CV / vacancies| MCP[Remote MCP Server]
+        MCP -->|4. Query cosine similarity| DB[("Qdrant Vector DB")]
+        KA -->|5. Forward reasoning prompt| AGW[AgentGateway]
+    end
+
+    subgraph "Platform Security (agentgateway-system)"
+        AGW -->|6. Redact PII & Filter injection| AGW
+        AGW -->|7. Forward request with secrets| LLM["Anthropic / Google Gemini"]
+    end
+
+    LLM -->|8. Response| KA
+    KA -->|9. Final Match Report| API
+    API -->|10. Return match results| UI
+```
+
+---
+
+### Основні компоненти системи:
+1. **React/Vite Frontend (Web):** Клієнтська частина для завантаження резюме та введення пошукових запитів.
+2. **Backend API (Express):** Обробляє запити, запускає локальні парсери/скрапери вакансій (Фаза 1) та перенаправляє завдання агентам kagent через A2A (Фаза 2).
+3. **AI Client Layer ([AIClient.ts](../app/server/ai/AIClient.ts)):** Уніфікований клієнт, що перенаправляє всі LLM запити на `AgentGateway`.
+4. **Agent Gateway ([AgentGateway](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)):** Envoy-посередник для фільтрації Prompt Injection, маскування персональних даних (PII, як-от Email, телефони, SSN, посилання на LinkedIn/GitHub) та динамічного FinOps роутингу (зокрема, перенаправлення простих завдань на дешеві моделі).
+5. **Declarative Agent (jobmatch-agent) (Фаза 2):** Спеціалізоване середовище виконання kagent для обробки промптів та взаємодії з MCP.
+6. **Memory (MCP + Qdrant) (Фаза 2):** MCP-сервер для семантичного пошуку збігів у векторній базі даних Qdrant.
 
 ---
 
@@ -80,19 +95,27 @@ sequenceDiagram
     Note over Dev, ProdCluster: Просування на продакшен (Promotion)
     Dev->>Git: Update tag in clusters/prod/.../helm-release.yaml on dev branch
     Dev->>Git: Create PR from dev to main & Merge
-    Git->>ProdCluster: Reconcile (reconcileStrategy: Revision)
+    Git->>ProdCluster: Reconcile (reconcileStrategy: ChartVersion)
     ProdCluster->>ProdCluster: Deploy to namespace jobmatch-prod
 ```
 
 ### Стратегія просування (Promotion Strategy):
-* **Dev-кластер (Гілка `dev`):** Синхронізується з каталогом `platform/flux/clusters/dev`. При кожному пуші в `dev` GitHub Actions автоматично збирає контейнери з тегом `v1.0.0-<git-sha>` та за допомогою кроку автоматичного запису оновлює цей тег у `dev/apps/jobmatch/helm-release.yaml`.
-* **Prod-кластер (Гілка `main`):** Синхронізується з каталогом `platform/flux/clusters/prod`. Для доставки оновлень розробник оновлює тег у `prod/apps/jobmatch/helm-release.yaml` на перевірений у dev, створює Pull Request у `main` та зливає його після перевірки.
+* **Dev-кластер (Гілка dev):** Синхронізується з каталогом `platform/flux/clusters/dev`. При кожному пуші в dev GitHub Actions автоматично збирає контейнери з тегом `v1.0.0-<git-sha>` та за допомогою кроку автоматичного запису оновлює цей тег у `dev/apps/jobmatch/helm-release.yaml`.
+* **Prod-кластер (Гілка main):** Синхронізується з каталогом `platform/flux/clusters/prod`. Для доставки оновлень розробник оновлює тег у `prod/apps/jobmatch/helm-release.yaml` на перевірений у dev, створює PR у main та зливає його після перевірки.
 
-### Безпека стратегії `reconcileStrategy: Revision`
-Обидва середовища використовують параметр `reconcileStrategy: Revision` у своїх `HelmRelease` ресурсах:
-1. **Швидкість доставки:** Це дозволяє Flux миттєво реагувати на будь-які комміти зі зміною тегів образів або налаштувань промптів без потреби підняття версії чарту в `Chart.yaml` при кожному релізі.
-2. **Безпека на продакшені:** Оскільки Prod-кластер відстежує виключно гілку `main`, будь-які зміни ревізій проходять жорсткий контроль через Pull Request та рев'ю коду перед застосуванням.
-3. **Автоматичний Rollback:** У разі невдалого старту подів (наприклад, збій конфігурації чи помилка образу), Flux автоматично виконає відкат (`rollback`) до попередньої стабільної ревізії.
+---
+
+### Порівняння стратегій узгодження (reconcileStrategy)
+
+Для балансу між швидкістю розробки в Dev та стабільністю в Prod використовуються різні стратегії узгодження HelmRelease:
+
+1. **Dev-середовище: reconcileStrategy: Revision**
+   * **Суть:** Flux миттєво реагує на будь-які комміти в Git (зміна тегів образів, значень values або конфігураційних файлів), оскільки він відслідковує зміну Git-ревізії.
+   * **Перевага:** Максимальна швидкість доставки без необхідності підняття версії чарту в `Chart.yaml` при кожній зміні (зручно для швидкої ітерації).
+
+2. **Prod-середовище: reconcileStrategy: ChartVersion**
+   * **Суть:** Flux виконує оновлення релізу на продакшені тільки тоді, коли версія Helm-чарту (`spec.chart.spec.version` у `HelmRelease` або версія чарту у репозиторії) явно змінюється.
+   * **Перевага:** Захист від випадкових змін конфігурації. Будь-які зміни в values чи параметрах шлюзу не будуть застосовані на Prod, доки розробник явно не оновить версію чарту. Це гарантує суворий релізний контроль, однозначність версіонування (SemVer) та мінімізує ризики людських помилок при злитті PR.
 
 ---
 
@@ -136,7 +159,67 @@ flowchart TD
 ```
 
 ### Ключові механізми безпеки:
-* **PII Redaction:** Усі резюме анонімізуються на рівні Express-сервера перед надсиланням до хмарних LLM.
+* **PII Redaction:** Усі резюме анонімізуються на рівні Express-сервера (або через політику AgentGateway Guardrails) перед надсиланням до хмарних LLM.
 * **Структурне тегування:** Вхідні дані користувача відокремлюються від системних інструкцій за допомогою суворих XML-тегів, що мінімізує успішність атак "ignore previous instructions".
 * **allow-list інструментів:** Агент має обмежений набір дій (наприклад, дозволено робити HTTP GET тільки на валідовані домени дощок вакансій).
-* **secrets поза git:** Усі API-ключі LLM-провайдерів розгортаються через External Secrets Operator (ESO) з інтеграцією GCP Secret Manager та монтуються в контейнер як змінні оточення під час старту поду в K8s.
+* **secrets поза git:** Усі API-ключі LLM-провайдерів ізольовані від контейнера застосунку. Вони управляються централізовано на рівні **AgentGateway** (з використанням Kubernetes Secrets / External Secrets Operator у просторі імен `agentgateway-system`) та автоматично підставляються у вихідні запити до LLM-провайдерів на рівні шлюзу.
+
+---
+
+## 5. Управління секретами (Secrets Management)
+
+Безпека API-ключів для LLM-провайдерів (OpenAI, Anthropic, Gemini) є критично важливою. Усі ключі повністю ізольовані від коду додатків і підставляються динамічно на рівні шлюзу безпеки **AgentGateway**. Синхронізація ключів реалізована за допомогою **External Secrets Operator (ESO)**.
+
+### Уніфікація хмарних середовищ (GCP Secret Manager)
+
+Для дотримання принципу відповідності середовищ (Dev-Prod parity) усі хмарні контури платформи (**Dev** та **Prod**) використовують єдиний підхід до управління секретами на базі **Google Secret Manager (GCP SM)**. Це дозволяє уникнути відмінностей у конфігураціях між середовищами в хмарі.
+
+---
+
+### Архітектурне рішення та життєвий цикл секретів у хмарі (Dev & Prod)
+
+```mermaid
+graph TD
+    subgraph "Google Cloud Platform"
+        GSM[("Google Secret Manager <br> (secrets: openai-api-key, ...)")]
+    end
+
+    subgraph "External Secrets Operator"
+        CSS["ClusterSecretStore: gcp-secret-manager <br> (uses gcpsm provider)"] -->|1. Authenticates & pulls keys| GSM
+    end
+
+    subgraph "Namespace: agentgateway-system"
+        ES_Claude["ExternalSecret: claude-auth-secret"] -->|2. Requests sync| CSS
+        ES_Gemini["ExternalSecret: gemini-auth-secret"] -->|2. Requests sync| CSS
+        
+        CSS -->|3. Replicates & maps| TargetSecretClaude[("Secret: claude-auth-secret <br> (format: Authorization: Bearer ...)")]
+        CSS -->|3. Replicates & maps| TargetSecretGemini[("Secret: gemini-auth-secret <br> (format: Authorization: Bearer ...)")]
+
+        AGW["AgentGateway (Envoy)"] -->|4. Mounts & injects keys| TargetSecretClaude
+        AGW["AgentGateway (Envoy)"] -->|4. Mounts & injects keys| TargetSecretGemini
+    end
+```
+
+#### Процес синхронізації:
+1. **Джерело правди (Source of Truth):** Усі API-ключі хмарних сервісів зберігаються в Google Secret Manager у відповідному GCP-проекті.
+2. **Авторизація оператора:** `ClusterSecretStore` під назвою `gcp-secret-manager` використовує провайдер `gcpsm`. Він авторизується в Google Cloud за допомогою механізму **Workload Identity** (для Kubernetes Service Account оператора ESO) або за допомогою змонтованого сервісного ключа GCP.
+3. **Мапування та форматування:** Ресурси `ExternalSecret` в `agentgateway-system` зчитують ключі з GCP SM та автоматично форматують їх, створюючи кінцевий секрет (наприклад, з полем `Authorization: Bearer <key>`), який використовує `AgentGateway`.
+4. **GitOps-сумісність:** Конфігураційні файли (декларативні описи `ExternalSecret` та `ClusterSecretStore`) безпечно зберігаються в Git-репозиторії та синхронізуються за допомогою **FluxCD**, тоді як самі секретні дані ніколи не коммітяться в репозиторій.
+
+---
+
+### Локальна розробка та тестування (Local Development & Testing)
+
+Для роботи системи локально на ноутбуці (у k3s / minikube / kind) передбачено механізми запуску без зовнішніх хмарних залежностей:
+
+#### 1. Локальне управління секретами
+Для використання секретів без хмари розробники можуть використовувати спрощений підхід прямого створення локальних секретів або імітацію роботи ESO без GCP SM. Детальний посібник:
+* [Локальна робота з секретами на ноутбуці (local-development-secrets.md)](manuals/local-development-secrets.md)
+
+#### 2. Локальне тестування безпеки (Mock LLM Service)
+Для тестування prompt-ін'єкцій, маскування персональних даних (PII) та FinOps-роутингу без здійснення реальних платних запитів до Anthropic Claude або Google Gemini у локальному кластері розгортається сервіс **`mock-llm`** (на базі Node.js).
+
+* **Принцип роботи:** Сервіс слухає порт `8089` у namespace `jobmatch-dev` та виступає кінцевою точкою (upstream) для `AgentGateway` у локальному контурі.
+* **Перевірка маскування:** `mock-llm` приймає запити від шлюзу, логує вхідне тіло запиту у свій `stdout` (дозволяючи розробнику через `kubectl logs` перевірити, чи замасковано персональні дані, наприклад, `<EMAIL_ADDRESS>`), та повертає фіксовану OpenAI-сумісну JSON-відповідь.
+* **Посібник з тестування:** [Тестування Prompt Masking та PII маскування (testing-security-masking.md)](manuals/testing-security-masking.md)
+

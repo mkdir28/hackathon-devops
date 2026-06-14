@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jobmatch-gateway-config
+  namespace: jobmatch-dev
+  labels:
+    app.kubernetes.io/name: jobmatch
+    app.kubernetes.io/component: api
+  annotations:
+    security-plan: "security_implementation_plan.md"
+
+data:
+  GATEWAY_URL: "http://agentgateway-external.agentgateway-system.svc.cluster.local"
+  LLM_PROVIDER: "claude"

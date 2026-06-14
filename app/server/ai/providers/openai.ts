@@ -9,9 +9,15 @@ export class OpenAIProvider implements AIClient {
   readonly model: string;
   private readonly client: OpenAI;
 
-  constructor(model?: string) {
+  constructor(model?: string, baseURL?: string) {
     this.model = model ?? config.openaiModel;
-    this.client = new OpenAI({ apiKey: config.openaiApiKey });
+    const resolvedBaseURL = baseURL || (process.env.GATEWAY_URL
+      ? (process.env.GATEWAY_URL.endsWith('/v1') ? process.env.GATEWAY_URL : `${process.env.GATEWAY_URL}/v1`)
+      : undefined);
+    this.client = new OpenAI({
+      apiKey: config.openaiApiKey || 'mock-key',
+      baseURL: resolvedBaseURL,
+    });
   }
 
   async generateStructured<T>(request: StructuredGenerateRequest): Promise<T> {

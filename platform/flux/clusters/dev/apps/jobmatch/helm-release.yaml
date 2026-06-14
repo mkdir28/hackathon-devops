@@ -8,22 +8,34 @@ spec:
   chart:
     spec:
       chart: ./platform/helm/jobmatch
-      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: flux-system
         namespace: flux-system
+      reconcileStrategy: Revision
   install:
     remediation:
       retries: 3
   values:
     global:
-      environment: dev
+      environment: stage
     api:
       replicaCount: 1
       image:
-        tag: v1.0.0-621e86d
+        repository: ghcr.io/dmzopi/jobmatch-api
+        tag: "v1.0.0-613a604"
+      env:
+        LLM_PROVIDER: "claude"
     web:
       replicaCount: 1
       image:
-        tag: v1.0.0-621e86d
+        repository: ghcr.io/dmzopi/jobmatch-web
+        tag: "v1.0.0-613a604"
+    redis:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/redis
+        tag: latest
+    qdrant:
+      enabled: true

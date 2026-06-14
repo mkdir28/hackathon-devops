@@ -1,8 +1,8 @@
 import { config } from '../config.js';
 import { getAIClient } from '../ai/AIClient.js';
 import { selectSkillsForTask } from '../ai/skills/loader.js';
-import { runJobSearchAgent } from '../agent/JobSearchAgent.js';
 import type { CvExtractionResult, JobMatchResult } from '../types.js';
+import { runJobSearchAgent } from '../agent/JobSearchAgent.js';
 
 const JOB_SYSTEM =
   'You are an expert career advisor. (Demo mode — sample listings only.)';
@@ -33,19 +33,20 @@ export async function runAgenticJobMatch(req: JobMatchRequest): Promise<JobMatch
     });
   }
 
-  const { agentMeta: _meta, ...result } = await runJobSearchAgent({
+  // Phase 1: Local orchestration (crawling job boards and LLM ranking). LLM requests are routed via AgentGateway.
+  return runJobSearchAgent({
     query: req.query,
     countryCode: req.countryCode,
     countryName: req.countryName,
     timeRange: req.timeRange,
     salaryHint: req.salaryHint,
+    userPrompt: req.prompt,
     cvSummary: req.cvSummary,
     cvSkills: req.cvSkills,
-    userPrompt: req.prompt,
     jsonSchema: req.response_json_schema,
   });
-  return result;
 }
+
 
 export async function extractCvStructured({
   text,
