@@ -18,12 +18,12 @@ spec:
 
   install:
     crds: Create
-    wait: false
+    disableWait: true
     remediation:
       retries: 3
   upgrade:
     crds: CreateReplace
-    wait: false
+    disableWait: true
     remediation:
       retries: 3
   values:
