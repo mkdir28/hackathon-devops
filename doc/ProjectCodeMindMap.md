@@ -257,9 +257,13 @@ graph TD
 
 ## Project Structure
 
-The repository is split into the **application** (`app/`) and the **platform / GitOps**
-deployment assets that make it a DevOps/SRE sandbox. The tree below highlights the
-directories referenced by the architecture flow above.
+he monorepo is organized into four responsibility zones:
+1. **`app/`** — JobMatch application (React/Vite frontend + Express API, agent, prompts, skills).
+2. **`platform/`** — Kubernetes manifests and FluxCD image automation (GitOps).
+3. **`evals/`** — Isolated LLM quality gate (LLM-as-a-Judge) used in CI before image builds.
+4. **`doc/`** — Architecture and operations documentation (mind map, ADR, HLD, CI/CD).
+The tree below maps directories to the architecture flow above.
+
 
 ```text
 hackathon-devops/
@@ -295,14 +299,31 @@ hackathon-devops/
 |   '-- docker/nginx.conf.template
 |
 |-- platform/                    # Kubernetes / GitOps deployment assets
-|   |-- base/                    # Kustomise base, ArgoCD and Flux manifests, k3d config
-|   '-- environments/dev/        # Per-environment Kustomize overlays
+|   |-- environments/
+|   |   |-- dev/                 # Kustomise overlay — development namespace
+|   |   '-- prod/                # Kustomise overlay — production namespace
+|   '-- flux-image-policy.yaml   # FluxCD ImageRepository / ImagePolicy / ImageUpdateAutomation
 |
-|-- doc/                         # Architecture documentation (this file, HLD, ADR)
-|-- ADR/                         # Architecture Decision Records
-|-- evals/                       # Evaluation harness
+|-- evals/                       # LLM quality gate (see subsection below)
+|   |-- dataset.json             # Golden test cases (CV, query, expected criteria)
+|   |-- run-evals.mjs            # Spawns API, runs /api/jobs/match, LLM-as-a-Judge
+|   |-- package.json             # Isolated deps (@google/genai, openai, dotenv)
+|   |-- package-lock.json        # Locked versions of project dependencies for consistent builds
+|   '-- .gitignore
+|
+|-- doc/                         # Project documentation
+|   |-- ProjectCodeMindMap.md    # Code exploration & architecture mind map (this file)
+|   |-- ADR.md                   # Architectural Decision Records
+|   |-- HLD.md                   # High-Level Solution Design
+|   '-- cicd.md                  # CI/CD & GitOps delivery guide
+|
+|-- .github/workflows/
+|   '-- deploy.yml               # Lint, typecheck, evals gate, Docker build, GHCR push
+|
 '-- README.md
 ```
+
+
 
 ### Layered View
 

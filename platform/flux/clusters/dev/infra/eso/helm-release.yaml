@@ -26,9 +26,6 @@ spec:
       retries: 3
   values:
     installCRDs: true
-    # Required for GCP Workload Identity on GKE (Option A below).
-    # ESO's controller ServiceAccount is annotated so GKE can impersonate
-    # the GCP Service Account without storing any key JSON in Kubernetes.
     serviceAccount:
       annotations:
         iam.gke.io/gcp-service-account: "eso-sa@happy-deploys-job-searcher.iam.gserviceaccount.com"
