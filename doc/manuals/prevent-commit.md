@@ -118,3 +118,26 @@ GitHub має вбудований безкоштовний функціонал
 
 *Це заблокує кнопку Merge в Pull Request, якщо Gitleaks чи Evals Quality Gate завершилися помилкою в CI/CD пайплайні.*
 
+> [!IMPORTANT]
+> **Автоматичні коміти у CI/CD (Bypass Branch Protection):**
+> Оскільки наш CI/CD пайплайн виконує автоматичні коміти в гілку `dev` (оновлення тегів образів та синхронізація промптів), дефолтний токен `GITHUB_TOKEN` не зможе зробити `git push` через правила захисту гілок.
+> 
+> Для обходу захисту гілок у CI/CD використовується секрет `ADMIN_PAT`. Необхідно налаштувати його наступним чином:
+> 
+> **1. Створення Fine-grained Personal Access Token (PAT):**
+> * Перейдіть у **Settings** вашого профілю GitHub -> **Developer settings** -> **Personal access tokens** -> **Fine-grained tokens**.
+> * Натисніть **Generate new token**.
+> * У полі **Repository access** виберіть **Only select repositories** та вкажіть ваш репозиторій `hackathon-devops`.
+> * У секції **Permissions** -> **Repository permissions** встановіть такі доступи:
+>   * **Contents**: виберіть **Access: Read and write** (для запису/комітів).
+>   * **Metadata**: виберіть **Access: Read-only** (обов'язкове системне поле).
+> * Згенеруйте та скопіюйте отриманий токен.
+> 
+> **2. Додавання секрету в репозиторій:**
+> * Перейдіть у налаштування репозиторію на GitHub: **Settings** -> **Secrets and variables** -> **Actions**.
+> * Натисніть **New repository secret**.
+> * Назва секрету: `ADMIN_PAT`.
+> * Значення секрету: вставте ваш скопійований токен.
+> * Натисніть **Add secret**.
+
+
