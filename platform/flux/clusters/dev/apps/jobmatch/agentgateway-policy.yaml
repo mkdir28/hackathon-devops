@@ -39,7 +39,6 @@ spec:
               matches:
                 - ".*github\\.com/.*"
                 - ".*linkedin\\.com/.*"
-                - "(?i)(?:my name is|name is)\\s+[a-zA-Z]+"
           - regex:
               action: Reject
               matches:
@@ -50,4 +49,4 @@ spec:
       prompt:
         prepend:
           - role: system
-            content: "You are a secure SRE and DevOps job matching system. Follow strictly matching rules."
+            content: "You are a secure Job Matching System. Follow strictly matching rules."

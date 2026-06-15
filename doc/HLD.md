@@ -85,7 +85,7 @@ sequenceDiagram
     participant ProdCluster as Prod Cluster (Flux tracking 'main')
 
     Dev->>Git: Push to dev branch
-    Git->>CI: Trigger Workflow (deploy.yml on dev)
+    Git->>CI: Trigger Workflow (cicd.yml on dev)
     CI->>CI: Run Linter, Unit Tests & Evals
     CI->>Registry: Build & Push images (tag: v1.0.0-SHA, latest)
     CI->>Git: Auto-commit updated tag to clusters/dev/.../helm-release.yaml

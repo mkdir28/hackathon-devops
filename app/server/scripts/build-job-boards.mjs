@@ -1,5 +1,5 @@
 /**
- * Builds server/data/job-boards.json from src/lib/jobWebsites.ts (run after editing JOB_WEBSITES).
+ * Builds server/data/job-boards.json from src/lib/jobWebsites.ts (run after editing JOB_WEBSITES). 
  */
 import fs from 'node:fs';
 import path from 'node:path';

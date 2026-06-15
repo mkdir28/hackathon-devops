@@ -50,3 +50,6 @@ coverage
 .pnpm-debug.log*
 package-lock.json.tmp
 yarn.lock.tmp
+
+
+doc/drafts
