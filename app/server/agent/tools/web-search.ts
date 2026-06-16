@@ -173,6 +173,12 @@ async function claudeWebSearch(
   query: string,
   limit: number
 ): Promise<RawJobListing[]> {
+  if (process.env.GATEWAY_URL) {
+    // The AgentGateway's Anthropic parser does not currently support the native 'web_search_20250305' tool variant
+    // (throwing a 503 marshal error). We fall back to Gemini's native web search, which is fully supported by the gateway.
+    return geminiWebSearch(board, query, limit);
+  }
+
   const resolvedBaseURL = process.env.GATEWAY_URL
     ? (process.env.GATEWAY_URL.endsWith('/v1') ? process.env.GATEWAY_URL : `${process.env.GATEWAY_URL}/v1`)
     : undefined;
