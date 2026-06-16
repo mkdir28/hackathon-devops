@@ -69,8 +69,6 @@ Test Files  16 passed (16)
 | `ai/providers/` | 100% | 78.57% | 100% | 100% |
 | `ai/skills/` | 95.55% | 81.81% | 100% | 100% |
 
-> **Before → After**: 43% → 82% statements (+39 pp), 44% → 91% functions (+47 pp)
-
 Generate HTML report:
 ```bash
 npm run test:coverage
@@ -311,8 +309,8 @@ Tests URL building + HTTP fetch + HTML parsing as a unit.
 | Eval | Test Case | Guard |
 |------|-----------|-------|
 | `tc-001` | DevOps relevance | Kubernetes jobs ranked above legacy sysadmin |
-| `tc-003` | Prompt injection | Hallucinated URLs stripped by allow-list filter |
-| `tc-004` | PII exposure | Output is defined; gateway-side masking documented |
+| `tc-002` | Prompt injection | Hallucinated URLs stripped by allow-list filter |
+| `tc-003` | PII exposure | Output is defined; gateway-side masking documented |
 | Dataset integrity | schema | All required fields present, `minScore` in `[1, 5]` |
 
 ---
@@ -329,7 +327,7 @@ cd app/server && npm run build
 export GEMINI_API_KEY=your_key
 
 # 3. Run evals (starts server automatically)
-cd evals && node run-evals.mjs
+cd ../../evals && node run-evals.mjs
 ```
 
 Without an API key, the runner executes in **mock mode** — it validates dataset integrity and exits 0. This is the CI default.

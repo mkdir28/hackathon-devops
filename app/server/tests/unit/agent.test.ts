@@ -4,7 +4,7 @@
  * selectBoardsForCountry) is mocked, no network or LLM keys needed.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { RawJobListing } from '../../agent/types.js';
+import type { RawJobListing, JobBoardDefinition } from '../../agent/types.js';
 import { RAW_LISTINGS, BOARD_DOU, BOARD_DJINNI } from '../fixtures/boards.js';
 
 // Module mocks
@@ -164,7 +164,7 @@ describe('runJobSearchAgent', () => {
     const calledBoardIds: string[] = [];
     const m = await mocks();
     m.selectBoardsForCountry.mockReturnValue([BOARD_DOU, BOARD_DJINNI, BOARD_DOU, BOARD_DJINNI]);
-    m.fetchJobBoard.mockImplementation(async (board) => {
+    m.fetchJobBoard.mockImplementation(async (board: JobBoardDefinition) => {
       calledBoardIds.push(board.id);
       return [RAW_LISTINGS[0]!];
     });
