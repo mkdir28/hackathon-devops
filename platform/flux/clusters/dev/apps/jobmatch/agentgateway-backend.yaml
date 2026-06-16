@@ -88,6 +88,9 @@ spec:
           - name: gemini-lite
             gemini:
               model: gemini-2.5-flash-lite
+            host: mock-llm.jobmatch-dev.svc.cluster.local
+            port: 8089
+            path: /post
             policies:
               auth:
                 secretRef:
@@ -97,13 +100,13 @@ spec:
           - name: openai-nano
             openai:
               model: gpt-5.4-nano
+            host: mock-llm.jobmatch-dev.svc.cluster.local
+            port: 8089
+            path: /post
             policies:
               auth:
                 secretRef:
                   name: openai-auth-secret
-    host: mock-llm.jobmatch-dev.svc.cluster.local
-    port: 8089
-    path: /post
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
@@ -118,6 +121,9 @@ spec:
           - name: claude-sonnet
             anthropic:
               model: claude-3-5-sonnet-20241022
+            host: mock-llm.jobmatch-dev.svc.cluster.local
+            port: 8089
+            path: /post
             policies:
               auth:
                 secretRef:
@@ -127,10 +133,10 @@ spec:
           - name: gemini-flash
             gemini:
               model: gemini-3.5-flash
+            host: mock-llm.jobmatch-dev.svc.cluster.local
+            port: 8089
+            path: /post
             policies:
               auth:
                 secretRef:
                   name: gemini-auth-secret
-    host: mock-llm.jobmatch-dev.svc.cluster.local
-    port: 8089
-    path: /post
