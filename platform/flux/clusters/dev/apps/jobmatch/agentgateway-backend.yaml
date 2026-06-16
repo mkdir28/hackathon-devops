@@ -115,9 +115,9 @@ spec:
   ai:
     groups:
       - providers:
-          - name: claude-sonnet
+          - name: claude-haiku
             anthropic:
-              model: claude-3-5-sonnet-20241022
+              model: claude-haiku-4-5
 #            host: mock-llm.jobmatch-dev.svc.cluster.local
 #            port: 8089
 #            path: /post
