@@ -7,7 +7,7 @@ spec:
   parentRefs:
     - name: agentgateway-external
   rules:
-    # 1. Simple matching tasks (job_match) -> cheep model
+    # 1. Simple matching tasks (job_match) -> cheep fast model
     - matches:
         - headers:
             - name: x-gateway-task-name
@@ -15,11 +15,11 @@ spec:
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
-          name: gemini-backend
+          name: llm-for-simple-task
           port: 443
-    # 2. Complex tasks or by default -> expensive model
+    # 2. Complex tasks and by default -> expensive model
     - backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
-          name: claude-backend
+          name: llm-for-complex-task
           port: 443

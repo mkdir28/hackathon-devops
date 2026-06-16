@@ -56,38 +56,81 @@ spec:
         key: llm-secrets
         property: claude-api-key
 ---
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayBackend
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
 metadata:
-  name: gemini-backend
+  name: openai-auth-secret
   namespace: agentgateway-system
 spec:
-  ai:
-    provider:
-      gemini:
-        model: gemini-2.5-flash-lite
-      host: mock-llm.jobmatch-dev.svc.cluster.local
-      port: 8089
-      path: /post
-  policies:
-    auth:
-      secretRef:
-        name: gemini-auth-secret
+  refreshInterval: 1h
+  secretStoreRef:
+    name: local-k8s-store
+    kind: ClusterSecretStore
+  target:
+    name: openai-auth-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: Authorization
+      remoteRef:
+        key: llm-secrets
+        property: openai-api-key
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
-  name: claude-backend
+  name: llm-for-simple-task
   namespace: agentgateway-system
 spec:
   ai:
-    provider:
-      anthropic:
-        model: claude-haiku-4-5
-      host: mock-llm.jobmatch-dev.svc.cluster.local
-      port: 8089
-      path: /post
-  policies:
-    auth:
-      secretRef:
-        name: claude-auth-secret
+    groups:
+      - name: primary-group
+        providers:
+          - name: gemini-lite
+            gemini:
+              model: gemini-2.5-flash-lite
+            policies:
+              auth:
+                secretRef:
+                  name: gemini-auth-secret
+      - name: fallback-group
+        providers:
+          - name: openai-nano
+            openai:
+              model: gpt-5.4-nano
+            policies:
+              auth:
+                secretRef:
+                  name: openai-auth-secret
+    host: mock-llm.jobmatch-dev.svc.cluster.local
+    port: 8089
+    path: /post
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: llm-for-complex-task
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+      - name: primary-group
+        providers:
+          - name: claude-sonnet
+            anthropic:
+              model: claude-3-5-sonnet-20241022
+            policies:
+              auth:
+                secretRef:
+                  name: claude-auth-secret
+      - name: fallback-group
+        providers:
+          - name: gemini-flash
+            gemini:
+              model: gemini-3.5-flash
+            policies:
+              auth:
+                secretRef:
+                  name: gemini-auth-secret
+    host: mock-llm.jobmatch-dev.svc.cluster.local
+    port: 8089
+    path: /post
