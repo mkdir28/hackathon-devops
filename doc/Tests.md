@@ -2,23 +2,32 @@
 
 ## Overview
 
-The test suite lives entirely inside `app/server/tests/` and runs with [Vitest](https://vitest.dev/).
-No network, no LLM keys, no running cluster is required — every external dependency is mocked.
+The test suite lives in `app/server/tests/` and runs with [Vitest](https://vitest.dev/).
+No network access, no LLM keys, and no running cluster are required — every external dependency is mocked.
 
 ```
 app/server/
 ├── tests/
 │   ├── fixtures/
-│   │   └── boards.ts            # Shared test doubles (boards, raw listings)
+│   │   └── boards.ts                — shared test doubles (boards + raw listings)
 │   ├── unit/
-│   │   ├── parsers.test.ts      # HTML parsers for job boards
-│   │   ├── http.test.ts         # fetchHtml + encodeQuery
-│   │   ├── json.test.ts         # parseJsonFromModelText + schemaInstruction
-│   │   ├── web-search.test.ts   # webSearchJobs error paths & backend selection
-│   │   └── agent.test.ts        # runJobSearchAgent + searchRawJobs (end-to-end unit)
+│   │   ├── parsers.test.ts          — HTML parsers for job boards
+│   │   ├── http.test.ts             — fetchHtml + encodeQuery
+│   │   ├── json.test.ts             — parseJsonFromModelText + schemaInstruction
+│   │   ├── web-search.test.ts       — webSearchJobs error paths & backend selection
+│   │   ├── agent.test.ts            — runJobSearchAgent + searchRawJobs (e2e unit)
+│   │   ├── synthesize.test.ts       — rankListingsWithLlm (hallucination guard, fallback)
+│   │   ├── boards.test.ts           — loadJobBoardCatalog, selectBoardsForCountry, formatBoardsForPrompt
+│   │   ├── resolve.test.ts          — resolveLlmConfig (all provider branches)
+│   │   ├── demo-notice.test.ts      — logDemoModeWarningIfNeeded (idempotency)
+│   │   ├── providers.test.ts        — DemoAIClient, OpenAIProvider, GeminiProvider, ClaudeProvider
+│   │   ├── ai-client.test.ts        — createAIClient factory, getAIClient singleton, resetAIClient
+│   │   ├── skills-loader.test.ts    — loadAllSkills, selectSkillsForTask, buildSkillsSystemAppendix
+│   │   ├── llm-service.test.ts      — runAgenticJobMatch, extractCvStructured, getActiveSkillIdsForTask
+│   │   └── cv-service.test.ts       — extractTextFromFile (PDF, text, unsupported types)
 │   └── integration/
-│       ├── fetch-board.test.ts  # fetchJobBoard (HTTP mocked)
-│       └── evals.test.ts        # LLM-as-a-Judge quality gates (AI mocked)
+│       ├── fetch-board.test.ts      — fetchJobBoard (HTTP mocked)
+│       └── evals.test.ts            — LLM-as-a-Judge quality gates (AI mocked)
 └── vitest.config.ts
 ```
 
@@ -39,12 +48,33 @@ npm run test:watch
 npm run test:coverage
 ```
 
-Expected output:
+Expected output (146 tests, ~600 ms):
 
 ```
-Test Files  8 passed (8)
-     Tests  69 passed (69)
+Test Files  16 passed (16)
+     Tests  146 passed (146)
   Duration  ~600ms
+```
+
+---
+
+## Coverage Report
+
+| Area | Statements | Branches | Functions | Lines |
+|------|-----------|----------|-----------|-------|
+| **All files** | **81.74%** | **72.04%** | **90.78%** | **84.52%** |
+| `agent/` | 97.69% | 82.53% | 100% | 98.29% |
+| `agent/tools/` | 59% | 55% | 70% | 62% |
+| `ai/` | 93.87% | 92.1% | 100% | 93.75% |
+| `ai/providers/` | 100% | 78.57% | 100% | 100% |
+| `ai/skills/` | 95.55% | 81.81% | 100% | 100% |
+
+> **Before → After**: 43% → 82% statements (+39 pp), 44% → 91% functions (+47 pp)
+
+Generate HTML report:
+```bash
+npm run test:coverage
+# open coverage/index.html
 ```
 
 ---
@@ -53,56 +83,36 @@ Test Files  8 passed (8)
 
 ### 1. `parsers.test.ts` — HTML board parsers
 
-**What is tested:**
+Tests `parseDouVacancies`, `parseWorkUa`, `parseDjinni`, `parseGenericLinks`, `parseBoardHtml`.
 
-| Test | Description |
-|------|-------------|
-| `parseDouVacancies` | Extracts job listings from DOU.ua HTML structure |
-| `parseWorkUa` | Extracts job IDs from Work.ua anchor tags |
-| `parseDjinni` | Parses Djinni job cards (company, location) |
-| `parseGenericLinks` | Generic link extractor with job-URL pattern matching |
-| `parseBoardHtml` | Dispatcher routes to correct parser by `board.parser` type |
-
-**Key assertions:**
+Key assertions:
 - Correct extraction of `title`, `company`, `location`, `applyUrl`
 - `limit` parameter is respected
-- Duplicate URLs are deduplicated
-- Index/search page links are excluded (e.g. `/vacancies/` with no ID)
+- Duplicate URLs are deduplicated within a page
+- Index/search page links are excluded (e.g. `/vacancies/` without an ID)
 - Links from other domains are excluded
-
-**Example:**
-
-```bash
-npx vitest run tests/unit/parsers.test.ts --reporter=verbose
-```
 
 ---
 
 ### 2. `http.test.ts` — HTTP utilities
 
-**What is tested:**
+Tests `encodeQuery` and `fetchHtml`.
 
 | Test | Description |
 |------|-------------|
-| `encodeQuery` | Encodes spaces, trims whitespace, collapses multi-spaces |
-| `fetchHtml` — success | Returns body text on `ok: true` response |
-| `fetchHtml` — error | Throws `HTTP <status>` on non-ok response |
-| `fetchHtml` — abort | Propagates `AbortError` on signal cancellation |
-| `fetchHtml` — headers | Sends `User-Agent: JobMatchAgent` header |
-
-**Mocking strategy:** `vi.stubGlobal('fetch', vi.fn(...))` replaces the global `fetch`.
-
-**Example:**
-
-```bash
-npx vitest run tests/unit/http.test.ts --reporter=verbose
-```
+| `encodeQuery` | Encodes spaces, trims whitespace, collapses multi-spaces, encodes special chars |
+| `fetchHtml` success | Returns body text on `ok: true` response |
+| `fetchHtml` error | Throws `HTTP <status>` on non-ok response |
+| `fetchHtml` abort | Propagates `AbortError` when signal fires |
+| `fetchHtml` headers | Sends `User-Agent: JobMatchAgent` header |
 
 ---
 
 ### 3. `json.test.ts` — LLM JSON extraction
 
-**What is tested:**
+Tests `parseJsonFromModelText` and `schemaInstruction`.
+
+Critical path: if JSON extraction breaks, all LLM responses become unparseable.
 
 | Test | Description |
 |------|-------------|
@@ -112,124 +122,198 @@ npx vitest run tests/unit/http.test.ts --reporter=verbose
 | No valid JSON | Throws `Model response did not contain valid JSON` |
 | `schemaInstruction` | Returns generic message or embedded schema |
 
-This module is critical: if it fails, all LLM responses become unparseable.
+---
 
-**Example:**
+### 4. `boards.test.ts` — Job board catalog
+
+Tests `loadJobBoardCatalog`, `selectBoardsForCountry`, `formatBoardsForPrompt`.
+`node:fs` is mocked — no `job-boards.json` file needed.
+
+| Test | Description |
+|------|-------------|
+| GLOBAL code | Returns only globally-tagged boards |
+| UA country | Returns UA-specific + global boards |
+| Unknown country | Returns only global boards (graceful fallback) |
+| `maxBoards` limit | Output is capped correctly |
+| Priority sort | Boards sorted descending by `priority` |
+| Deduplication | Boards with same `id` appear once |
+| Case insensitive | `UA` and `ua` produce the same result |
+| `formatBoardsForPrompt` | Groups by region, sorts regions alphabetically |
+| Cache | Second call to `loadJobBoardCatalog` returns same reference |
+
+---
+
+### 5. `resolve.test.ts` — LLM config resolution
+
+Tests `resolveLlmConfig` for all four provider values.
 
 ```bash
-npx vitest run tests/unit/json.test.ts --reporter=verbose
+npx vitest run tests/unit/resolve.test.ts --reporter=verbose
 ```
 
 ---
 
-### 4. `web-search.test.ts` — Web search tool
+### 6. `demo-notice.test.ts` — Demo mode warning
 
-**What is tested:**
+Tests `logDemoModeWarningIfNeeded`:
+- Logs a warning when `demoMode: true`
+- Logs **only once** even on repeated calls (idempotent via module-level flag)
+- Does not log when `demoMode: false`
+
+---
+
+### 7. `providers.test.ts` — AI provider implementations
+
+**Mocking strategy**: `vi.hoisted()` makes mock functions available before module hoisting; SDK classes are mocked using `vi.fn().mockImplementation(class { ... })` (Vitest requires `class` keyword for constructor mocks).
+
+#### DemoAIClient
+- Returns DEMO_JOBS array for `job_match` task
+- Returns demo CV structure for `cv_extract` task
+
+#### OpenAIProvider
+- Parses structured JSON from `chat.completions.create` response
+- Throws `Empty OpenAI response` on empty content
+- Sends `json_schema` format when schema is provided; `json_object` when not
+- Sends both system and user messages
+
+#### GeminiProvider
+- Parses structured JSON from `models.generateContent` response
+- Throws `Empty Gemini response` on empty text
+- Delegates to `OpenAIProvider` when `GATEWAY_URL` env is set
+- Appends `/v1` to `GATEWAY_URL` when missing
+
+#### ClaudeProvider
+- Parses structured JSON from `messages.create` response
+- Throws `Empty Claude response` on empty content array
+- Delegates to `OpenAIProvider` when `GATEWAY_URL` env is set
+
+---
+
+### 8. `ai-client.test.ts` — AIClient factory and singleton
+
+Provider classes are mocked, so no SDK constructors are invoked.
 
 | Test | Description |
 |------|-------------|
-| `webSearchBackend()` | Returns correct identifier per provider or `null` in demo |
+| `createAIClient` demo mode | Returns `DemoAIClient` when `demoMode: true` |
+| `createAIClient` gemini | Returns `GeminiProvider` |
+| `createAIClient` claude | Returns `ClaudeProvider` |
+| `createAIClient` + `GATEWAY_URL` | Returns `OpenAIProvider` (gateway routing) |
+| `getAIClient` singleton | Two calls return the same instance |
+| `resetAIClient` | Clears singleton; next call creates a new instance |
+
+---
+
+### 9. `skills-loader.test.ts` — Agent skills loading
+
+`node:fs` is mocked. Tests `loadAllSkills`, `selectSkillsForTask`, `buildSkillsSystemAppendix`.
+
+| Test | Description |
+|------|-------------|
+| Missing skills dir | Returns `[]` |
+| Directory with SKILL.md | Loads skill with parsed name and description |
+| Top-level `.md` files | Loads skills from standalone markdown files |
+| Non-.md and no-SKILL.md entries | Skipped cleanly |
+| `SKILLS_DIR` env var | Used as skills root when set |
+| `selectSkillsForTask` | Returns only IDs matching `job_match` or `cv_extract` |
+| `buildSkillsSystemAppendix` | Returns `''` when no skills; markdown block when found |
+
+---
+
+### 10. `web-search.test.ts` — Web search tool
+
+| Test | Description |
+|------|-------------|
+| `webSearchBackend()` | Returns correct identifier per provider (`null` in demo) |
 | Demo mode guard | Throws when `demoMode: true` |
 | Missing Gemini key | Throws `GEMINI_API_KEY is required` |
 | Missing OpenAI key | Throws `OPENAI_API_KEY is required` |
 | Missing Anthropic key | Throws `ANTHROPIC_API_KEY is required` |
 
-**Mocking strategy:** `vi.mock('../../ai/resolve.js')` controls what `resolveLlmConfig()` returns, avoiding any env var caching issues.
-
-**Example:**
-
-```bash
-npx vitest run tests/unit/web-search.test.ts --reporter=verbose
-```
-
 ---
 
-### 5. `agent.test.ts` — JobSearchAgent orchestration
+### 11. `agent.test.ts` — JobSearchAgent orchestration
 
-Tests the full agent pipeline with all I/O mocked.
-
-**What is tested:**
+Full pipeline tested with all I/O mocked.
 
 | Test | Description |
 |------|-------------|
 | No boards for country | Throws `No job boards configured for country` |
-| URL deduplication | `dedupeListings` removes duplicate `applyUrl` before LLM call |
+| URL deduplication | 3 raw listings with 2 unique URLs → 2 sent to LLM |
 | All boards empty | Throws `No job listings found` |
-| `agentMeta` returned | Tool-call logs and counts are present in result |
+| `agentMeta` returned | Tool-call logs and board count present in result |
 | Fallback to `webSearchJobs` | Called when `fetchJobBoard` returns `[]` |
 | Error resilience | Board error logged as `status: 'error'`, agent continues |
 | Parallel board queries | All boards called via `Promise.all` batches |
-| `searchRawJobs` dedup | Multiple boards returning the same URL → 1 unique result |
 
-**Mocking strategy:**
+---
 
-```typescript
-vi.mock('../../agent/boards.js')           // selectBoardsForCountry
-vi.mock('../../agent/tools/fetch-board.js') // fetchJobBoard
-vi.mock('../../agent/tools/web-search.js')  // webSearchJobs
-vi.mock('../../agent/synthesize.js')        // rankListingsWithLlm
-```
+### 12. `synthesize.test.ts` — LLM ranking pipeline
 
-**Example:**
+| Test | Description |
+|------|-------------|
+| Empty listings | Throws `No verified listings to rank` |
+| Valid jobs returned | Jobs with allow-listed URLs pass through |
+| Hallucination guard | Jobs with URLs not in original listings are stripped |
+| Fallback rank | When LLM returns no valid jobs, raw listings are used |
+| Cap at 10 | Even if LLM returns 15 jobs, output is ≤ 10 |
+| LLM suggestions used | When provided alongside valid jobs |
+| CV data in prompt | `cvSummary` and `cvSkills` appear in LLM user prompt |
 
-```bash
-npx vitest run tests/unit/agent.test.ts --reporter=verbose
-```
+---
+
+### 13. `llm-service.test.ts` — Service layer
+
+| Test | Description |
+|------|-------------|
+| Demo mode path | Calls `DemoAIClient.generateStructured` with `task: 'job_match'` |
+| Live mode path | Calls `runJobSearchAgent` with correct params |
+| `timeRange` / `salaryHint` | Forwarded to the agent |
+| `extractCvStructured` | Calls `cv_extract` task, wraps raw output in success envelope |
+| CV text in prompt | Raw text appears in LLM `userPrompt` |
+| `getActiveSkillIdsForTask` | Returns skill IDs list |
+
+---
+
+### 14. `cv-service.test.ts` — CV file extraction
+
+| Test | Description |
+|------|-------------|
+| PDF by mimetype | Calls `pdf-parse`, returns extracted text |
+| PDF by `.pdf` extension | Detected even without mimetype |
+| Plain text (`text/plain`) | Read as UTF-8 string |
+| Markdown `.md` file | Read as plain text |
+| JSON file | Read as plain text |
+| Unsupported type (PNG) | Throws `Unsupported file type` |
+| Unsupported extension (`.docx`) | Throws `Unsupported file type` |
 
 ---
 
 ## Integration Tests
 
-### 6. `fetch-board.test.ts` — fetchJobBoard
+### 15. `fetch-board.test.ts` — fetchJobBoard
 
-Tests the composition of URL-building + HTTP fetch + HTML parsing.
-
-**What is tested:**
+Tests URL building + HTTP fetch + HTML parsing as a unit.
 
 | Test | Description |
 |------|-------------|
-| Parse DOU HTML | Returns listings with correct `applyUrl` |
+| DOU HTML parse | Returns listings with correct `applyUrl` |
 | Web-only boards | `fetch` is never called; returns `[]` |
 | HTTP 503 error | Throws `HTTP 503` |
-| Query substitution | `{query}` placeholder replaced in URL template |
-| AbortError propagation | Fetch abort error bubbles up correctly |
-| Work.ua URL check | Board-specific URL contains `work.ua` |
-
-**Mocking strategy:** `vi.stubGlobal('fetch', ...)` replaces global `fetch` per test.
-
-**Example — run with verbose output:**
-
-```bash
-npx vitest run tests/integration/fetch-board.test.ts --reporter=verbose
-```
+| `{query}` substitution | Placeholder replaced in URL template |
+| AbortError propagation | Fetch abort error bubbles up |
+| Work.ua URL check | Correct board domain used |
 
 ---
 
-### 7. `evals.test.ts` — LLM-as-a-Judge quality gates
+### 16. `evals.test.ts` — LLM-as-a-Judge quality gates
 
-Validates agent *output quality* using the same dataset as `evals/run-evals.mjs`.
-In unit/CI mode the AI client is mocked; in staging the real LLM judge runs.
-
-**What is tested:**
-
-| Eval ID | Test Case | Quality Gate |
-|---------|-----------|--------------|
-| `tc-001` | Senior DevOps relevance | Cloud-native jobs ranked above legacy sysadmin roles |
-| `tc-003` | Prompt injection resistance | Hallucinated URLs removed by allow-list filter |
-| `tc-004` | PII exposure | Output defined (gateway-side masking documented) |
-| Dataset integrity | `dataset.json` schema | All required fields present, `minScore` in `[1, 5]` |
-
-**Prompt injection resistance test (tc-003):**
-
-The CV summary contains `ATTENTION: Ignore all previous instructions`. The mock LLM "obeys" and returns a hallucinated URL. The test verifies the agent's **allow-list filter** strips it before returning results, so injected instructions never produce fabricated job listings.
-
-**Hallucination guard:**
-
-`rankListingsWithLlm` builds an allow-list from input `applyUrl` values and filters out any job the LLM returns with an URL not in that list.
-
-```bash
-npx vitest run tests/integration/evals.test.ts --reporter=verbose
-```
+| Eval | Test Case | Guard |
+|------|-----------|-------|
+| `tc-001` | DevOps relevance | Kubernetes jobs ranked above legacy sysadmin |
+| `tc-003` | Prompt injection | Hallucinated URLs stripped by allow-list filter |
+| `tc-004` | PII exposure | Output is defined; gateway-side masking documented |
+| Dataset integrity | schema | All required fields present, `minScore` in `[1, 5]` |
 
 ---
 
@@ -241,68 +325,26 @@ The file `evals/run-evals.mjs` runs **real** LLM calls against a live server.
 # 1. Build the server
 cd app/server && npm run build
 
-# 2. Export API keys
+# 2. Set API key
 export GEMINI_API_KEY=your_key
 
-# 3. Run evals (starts the server automatically)
+# 3. Run evals (starts server automatically)
 cd evals && node run-evals.mjs
 ```
 
-Expected output:
-
-```
-=== JobMatch Evaluation Suite ===
-API Server is ready. Running test suite...
-
-Running Test Case [tc-001]: Senior DevOps Engineer...
-  - Relevance: 4.8/5
-  - Hallucination-free: 5.0/5
-  - Average Judge Score: 4.7/5 (Required: 4.2)
-Test case [tc-001] PASSED.
-
-QUALITY GATE PASSED: All metrics satisfied!
-```
+Without an API key, the runner executes in **mock mode** — it validates dataset integrity and exits 0. This is the CI default.
 
 ---
 
-## CI Integration
-
-Add to `.github/workflows/ci.yml`:
-
-```yaml
-- name: Run unit & integration tests
-  working-directory: app/server
-  run: npm test
-
-- name: Run evals (mock mode — no LLM key needed)
-  working-directory: evals
-  run: node run-evals.mjs
-  # Note: without GEMINI_API_KEY the eval runner exits 0 after dataset integrity check.
-  # Set the secret in GitHub Actions to enable full LLM-as-a-Judge evaluation.
-```
-
----
-
-## Test Architecture Decisions
+## Architecture & Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| **Vitest** | Native ESM, TypeScript support, minimal config, fast |
-| **No external HTTP** | Tests are hermetic; board websites change constantly |
-| **Mock AI client** | LLM APIs are non-deterministic and require paid keys in CI |
+| **Vitest** | Native ESM support, TypeScript out-of-the-box, fast (< 1 s for 146 tests) |
+| **`vi.hoisted()`** | Makes mock variables available at hoist time — required for SDK constructor mocks |
+| **`class` in `mockImplementation`** | Vitest requires `class` keyword (not arrow function) for constructor mocks via `new` |
+| **No real HTTP** | Board websites change; tests must be hermetic |
+| **Mock AI client** | LLM calls are non-deterministic and require paid keys |
 | **Allow-list filter tested** | Hallucination guard is a security-critical path |
-| **Evals separate from unit tests** | LLM quality gates need real models; dataset integrity runs always |
-| **`vi.mock` at module level** | Avoids cached-module issues with env-based config switching |
-
-
-## Coverage Report
-
-```bash
-cd app/server && npm run test:coverage
-```
-
-Output goes to `app/server/coverage/index.html`. Covered modules:
-
-- `agent/**` — orchestration, boards, deduplication
-- `ai/**` — JSON parsing, client interface
-- `services/**` — CV extraction
+| **`vi.doMock` + `vi.resetModules`** | Used in `resolve.test.ts` to control module-level config per test |
+| **`node:fs` mocked** | Required for `boards.ts` and `skills/loader.ts` to run without files on disk |
