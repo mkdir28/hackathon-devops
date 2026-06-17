@@ -23,14 +23,14 @@ spec:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-api
-        tag: "v1.0.0-210cdbb"
+        tag: "v1.0.0-8a56bfa"
       env:
         LLM_PROVIDER: "gemini"
     web:
       replicaCount: 1
       image:
         repository: ghcr.io/mkdir28/jobmatch-web
-        tag: "v1.0.0-210cdbb"
+        tag: "v1.0.0-8a56bfa"
     redis:
       enabled: true
       image:
