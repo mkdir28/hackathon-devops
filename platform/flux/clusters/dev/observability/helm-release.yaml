@@ -17,13 +17,11 @@ spec:
     grafana:
       enabled: true
       service:
-        type: NodePort
-        nodePort: 30000
+        type: ClusterIP
     prometheus:
       enabled: true
       prometheusSpec:
         podMonitorSelectorNilUsesHelmValues: false
         podMonitorNamespaceSelector: {}
       service:
-        type: NodePort
-        nodePort: 30900
+        type: ClusterIP
