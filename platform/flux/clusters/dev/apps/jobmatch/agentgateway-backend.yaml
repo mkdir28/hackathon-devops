@@ -113,18 +113,18 @@ metadata:
   namespace: agentgateway-system
 spec:
   ai:
-    groups:
-      - providers:
-          - name: claude-haiku
-            anthropic:
-              model: claude-haiku-4-5
+#    groups:
+#      - providers:
+#          - name: claude-haiku
+#            anthropic:
+#              model: claude-haiku-4-5
 #            host: mock-llm.jobmatch-dev.svc.cluster.local
 #            port: 8089
 #            path: /post
-            policies:
-              auth:
-                secretRef:
-                  name: claude-auth-secret
+#            policies:
+#              auth:
+#                secretRef:
+#                  name: claude-auth-secret
       - providers:
           - name: gemini-flash
             gemini:
