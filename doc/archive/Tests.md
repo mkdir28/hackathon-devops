@@ -2,7 +2,7 @@
 
 ## Overview
 
-The test suite lives in `app/server/tests/` and runs with [Vitest](https://vitest.dev/).
+The test suite resides in `app/server/tests/` and runs with [Vitest](https://vitest.dev/).
 No network access, no LLM keys, and no running cluster are required — every external dependency is mocked.
 
 ```
@@ -48,11 +48,11 @@ npm run test:watch
 npm run test:coverage
 ```
 
-Expected output (146 tests, ~600 ms):
+Expected output (149 tests, ~600 ms):
 
 ```
 Test Files  16 passed (16)
-     Tests  146 passed (146)
+     Tests  149 passed (149)
   Duration  ~600ms
 ```
 
@@ -306,11 +306,13 @@ Tests URL building + HTTP fetch + HTML parsing as a unit.
 
 ### 16. `evals.test.ts` — LLM-as-a-Judge quality gates
 
-| Eval | Test Case | Guard |
+| Eval / Test case | Goal | Mechanism / Guard |
 |------|-----------|-------|
 | `tc-001` | DevOps relevance | Kubernetes jobs ranked above legacy sysadmin |
-| `tc-002` | Prompt injection | Hallucinated URLs stripped by allow-list filter |
-| `tc-003` | PII exposure | Output is defined; gateway-side masking documented |
+| `tc-002` | Frontend relevance | Modern React stack matching with fullstack filters |
+| `tc-003` | Prompt injection | Hallucinated URLs stripped by allow-list filter |
+| `tc-004` | PII exposure | PII masking (email, phone, SSN, URLs) at Gateway |
+| `tc-005` | Output Guardrails | Regex reject on gateway for leaks & discrimination |
 | Dataset integrity | schema | All required fields present, `minScore` in `[1, 5]` |
 
 ---
@@ -338,7 +340,7 @@ Without an API key, the runner executes in **mock mode** — it validates datase
 
 | Decision | Rationale |
 |----------|-----------|
-| **Vitest** | Native ESM support, TypeScript out-of-the-box, fast (< 1 s for 146 tests) |
+| **Vitest** | Native ESM support, TypeScript out-of-the-box, fast (< 1 s for 149 tests) |
 | **`vi.hoisted()`** | Makes mock variables available at hoist time — required for SDK constructor mocks |
 | **`class` in `mockImplementation`** | Vitest requires `class` keyword (not arrow function) for constructor mocks via `new` |
 | **No real HTTP** | Board websites change; tests must be hermetic |

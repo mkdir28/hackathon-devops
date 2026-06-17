@@ -7,21 +7,21 @@ We have successfully implemented and verified **Phase 1: Agent Gateway Integrati
 ## 🛠️ Changes Implemented
 
 ### 1. Application Backend API Updates
-* **[openai.ts](../app/server/ai/providers/openai.ts)**: Modified constructor to support custom `baseURL` (pointing to the gateway) and mock API key fallback.
-* **[gemini.ts](../app/server/ai/providers/gemini.ts)** & **[claude.ts](../app/server/ai/providers/claude.ts)**: Configured constructors and methods to fall back to the gateway-targeted `OpenAIProvider` transport when `GATEWAY_URL` is set in the environment.
-* **[config.ts](../app/server/config.ts)**: Updated key detection and provider selection logic to prevent forcing `demoMode` when `GATEWAY_URL` is configured.
-* **[AIClient.ts](../app/server/ai/AIClient.ts)**: Configured `createAIClient()` to directly return `OpenAIProvider` pointing to the gateway `baseURL` if `GATEWAY_URL` is set.
-* **[llm.ts](../app/server/services/llm.ts)**: Reverted `runAgenticJobMatch` to execute the local orchestration `runJobSearchAgent` (running native DOU.ua/Work.ua/Djinni crawlers) and route LLM queries through the gateway-enabled client.
-* **[index.ts](../app/server/index.ts)**: Commented out the `/mcp` routes for Phase 1.
+* **[openai.ts](../../app/server/ai/providers/openai.ts)**: Modified constructor to support custom `baseURL` (pointing to the gateway) and mock API key fallback.
+* **[gemini.ts](../../app/server/ai/providers/gemini.ts)** & **[claude.ts](../../app/server/ai/providers/claude.ts)**: Configured constructors and methods to fall back to the gateway-targeted `OpenAIProvider` transport when `GATEWAY_URL` is set in the environment.
+* **[config.ts](../../app/server/config.ts)**: Updated key detection and provider selection logic to prevent forcing `demoMode` when `GATEWAY_URL` is configured.
+* **[AIClient.ts](../../app/server/ai/AIClient.ts)**: Configured `createAIClient()` to directly return `OpenAIProvider` pointing to the gateway `baseURL` if `GATEWAY_URL` is set.
+* **[llm.ts](../../app/server/services/llm.ts)**: Reverted `runAgenticJobMatch` to execute the local orchestration `runJobSearchAgent` (running native DOU.ua/Work.ua/Djinni crawlers) and route LLM queries through the gateway-enabled client.
+* **[index.ts](../../app/server/index.ts)**: Commented out the `/mcp` routes for Phase 1.
 
 ### 2. GitOps & Gateway Infrastructure Updates
-* **[agentgateway-backend.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-backend.yaml)**: 
+* **[agentgateway-backend.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-backend.yaml)**: 
   * Added `model: gemini-2.5-flash-lite` override to `gemini-backend`.
   * Added `model: claude-haiku-4-5` override to `claude-backend`.
   * This ensures that any model name requested by the client is correctly translated to the target upstream provider's expected format.
-* **[agentgateway-config.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-config.yaml)**: Configured `LLM_PROVIDER: "claude"` in the gateway configmap data.
-* **[helm-release.yaml](../platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml)**: Set `api.env.LLM_PROVIDER: "claude"` in dev values to override default chart envs.
-* **[agentgateway-policy.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)**: Fixed prompt prepend marshalling failure by changing the uppercase role `SYSTEM` to lowercase `system` as expected by the Envoy policy schema.
+* **[agentgateway-config.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-config.yaml)**: Configured `LLM_PROVIDER: "claude"` in the gateway configmap data.
+* **[helm-release.yaml](../../platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml)**: Set `api.env.LLM_PROVIDER: "claude"` in dev values to override default chart envs.
+* **[agentgateway-policy.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)**: Fixed prompt prepend marshalling failure by changing the uppercase role `SYSTEM` to lowercase `system` as expected by the Envoy policy schema.
 
 ---
 

@@ -1,15 +1,15 @@
 # High-Level Solution Design (HLD) — JobMatch Platform
 
-Цей документ визначає високорівневу архітектуру платформи **JobMatch**, включаючи дизайн компонентів, життєвий цикл запитів, процес CI/CD автоматизації та контур тестування якості (Evals) для стартапу Scout.
+This document defines the high-level architecture of the **JobMatch** platform, including component design, request lifecycle, CI/CD automation workflows, and the evaluation loop (Evals) for the Scout startup.
 
 ---
 
-## 1. Архітектурна діаграма системи (System Architecture)
+## 1. System Architecture Diagram
 
-Для забезпечення безпеки, FinOps контролю та масштабованості архітектура впроваджується у два етапи:
+To ensure security, FinOps control, and scalability, the architecture is implemented in two phases:
 
-### Фаза 1: Інтеграція Agent Gateway (Поточний стан)
-Локальний збір та оркестрація пошуку вакансій ([JobSearchAgent.ts](../app/server/agent/JobSearchAgent.ts)) залишаються на Node.js API сервері, але всі запити до LLM проксіюються через **AgentGateway** (на базі Envoy). Шлюз виконує анонімізацію даних (PII), фільтрує ін'єкції промптів та інжектує API-ключі.
+### Phase 1: Agent Gateway Integration (Current State)
+Local scraping and job search orchestration ([JobSearchAgent.ts](../app/server/agent/JobSearchAgent.ts)) remain on the Node.js API server, but all LLM calls are proxied through **AgentGateway** (powered by Envoy). The gateway performs PII masking, filters prompt injections, and injects API credentials.
 
 ```mermaid
 graph TD
@@ -23,10 +23,10 @@ graph TD
     subgraph "Platform Security (agentgateway-system)"
         AIClient -->|4. Request with x-gateway-task-name header| AGW[AgentGateway]
         AGW -->|5. PII Masking & Prompt Guard| AGW
-        Secret[("claude-auth-secret / gemini-auth-secret")] -->|6. Inject API Keys| AGW
+        Secret[("claude-auth-secret / gemini-auth-secret / openai-auth-secret")] -->|6. Inject API Keys| AGW
     end
 
-    AGW -->|7. Route based on task type to Gemini or Claude| LLM["Anthropic Claude / Google Gemini"]
+    AGW -->|7. Route based on task type to primary models| LLM["Claude Haiku 4.5 / Gemini 2.5 Flash-Lite"]
     LLM -->|8. Structured Job Score JSON| AGW
     AGW -->|9. Forward response| API
     API -->|10. Return ranked job list| UI
@@ -34,8 +34,8 @@ graph TD
 
 ---
 
-### Фаза 2: Декларативний Агент та Векторна БД (Цільова архітектура)
-Локальна логіка оркестрації повністю вилучається з API-сервера та переноситься у декларативні под-агенти **kagent**, які взаємодіють з віддаленими серверами **MCP** для векторизації та семантичного пошуку у **Qdrant Vector DB**.
+### Phase 2: Declarative Agent & Vector DB (Target Architecture)
+Local orchestration logic is completely removed from the API server and migrated to declarative agent pods **kagent**, which interact with remote **MCP** servers for vectorization and semantic search inside **Qdrant Vector DB**.
 
 ```mermaid
 graph TD
@@ -50,7 +50,7 @@ graph TD
 
     subgraph "Platform Security (agentgateway-system)"
         AGW -->|6. Redact PII & Filter injection| AGW
-        AGW -->|7. Route based on task type & forward request| LLM["Anthropic / Google Gemini"]
+        AGW -->|7. Route based on task type & forward request| LLM["Anthropic Claude / Google Gemini"]
     end
 
     LLM -->|8. Response| KA
@@ -60,19 +60,19 @@ graph TD
 
 ---
 
-### Основні компоненти системи:
-1. **React/Vite Frontend (Web):** Клієнтська частина для завантаження резюме та введення пошукових запитів.
-2. **Backend API (Express):** Обробляє запити, запускає локальні парсери/скрапери вакансій (Фаза 1) та перенаправляє завдання агентам kagent через A2A (Фаза 2).
-3. **AI Client Layer ([AIClient.ts](../app/server/ai/AIClient.ts)):** Уніфікований клієнт, що перенаправляє всі LLM запити на `AgentGateway`.
-4. **Agent Gateway ([AgentGateway](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)):** Envoy-посередник для фільтрації Prompt Injection, маскування персональних даних (PII, як-от Email, телефони, SSN, посилання на LinkedIn/GitHub) та динамічного FinOps роутингу на основі типу задачі (через HTTP-заголовок `x-gateway-task-name`, який спрямовує `job_match` на дешеві моделі Gemini, а `cv_extract` — на Claude).
-5. **Declarative Agent (jobmatch-agent) (Фаза 2):** Спеціалізоване середовище виконання kagent для обробки промптів та взаємодії з MCP.
-6. **Memory (MCP + Qdrant) (Фаза 2):** MCP-сервер для семантичного пошуку збігів у векторній базі даних Qdrant.
+### Core System Components:
+1. **React/Vite Frontend (Web):** Client application for uploading CVs and entering search queries.
+2. **Backend API (Express):** Processes requests, runs local job board scrapers (Phase 1), and delegates matching tasks to agent pods via A2A (Phase 2).
+3. **AI Client Layer ([AIClient.ts](../app/server/ai/AIClient.ts)):** Unified LLM client mapping all requests through `AgentGateway`.
+4. **Agent Gateway ([AgentGateway](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)):** Envoy-based proxy for prompt injection filtering, data anonymization (masking emails, phones, SSNs, LinkedIn/GitHub links), and dynamic FinOps routing based on task names (routing simple matching to `gemini-2.5-flash-lite` / `gpt-5.4-nano`, and complex extraction tasks to `claude-haiku-4-5` / `gemini-3.5-flash`).
+5. **Declarative Agent (jobmatch-agent) (Phase 2):** Specialized agent execution environment for prompt processing and MCP interactions.
+6. **Memory (MCP + Qdrant) (Phase 2):** MCP server executing vector lookups against the Qdrant database.
 
 ---
 
-## 2. CI/CD Пайплайн та GitOps Реліз-Процес
+## 2. CI/CD Pipeline and GitOps Release Process
 
-Розгортання платформи здійснюється повністю декларативно за допомогою GitOps-контролера FluxCD, розділеного на рівні окремих каталогів кластерів та відповідних гілок.
+Deployments are fully declarative, managed by the FluxCD GitOps controller, separated by cluster directories and Git branches.
 
 ```mermaid
 sequenceDiagram
@@ -92,36 +92,39 @@ sequenceDiagram
     Git->>DevCluster: Reconcile (reconcileStrategy: Revision)
     DevCluster->>DevCluster: Deploy to namespace jobmatch-dev
 
-    Note over Dev, ProdCluster: Просування на продакшен (Promotion)
+    Note over Dev, ProdCluster: Promotion to Production (Promotion)
     Dev->>Git: Update tag in clusters/prod/.../helm-release.yaml on dev branch
     Dev->>Git: Create PR from dev to main & Merge
     Git->>ProdCluster: Reconcile (reconcileStrategy: ChartVersion)
     ProdCluster->>ProdCluster: Deploy to namespace jobmatch-prod
 ```
 
-### Стратегія просування (Promotion Strategy):
-* **Dev-кластер (Гілка dev):** Синхронізується з каталогом `platform/flux/clusters/dev`. При кожному пуші в dev GitHub Actions автоматично збирає контейнери з тегом `v1.0.0-<git-sha>` та за допомогою кроку автоматичного запису оновлює цей тег у `dev/apps/jobmatch/helm-release.yaml`.
-* **Prod-кластер (Гілка main):** Синхронізується з каталогом `platform/flux/clusters/prod`. Для доставки оновлень розробник оновлює тег у `prod/apps/jobmatch/helm-release.yaml` на перевірений у dev, створює PR у main та зливає його після перевірки.
+### Promotion Strategy:
+* **Dev Cluster (branch `dev`):** Syncs with `platform/flux/clusters/dev`. On every push to `dev`, GHA builds container images with tag `v1.0.0-<git-sha>` and updates it in `dev/apps/jobmatch/helm-release.yaml`.
+* **Prod Cluster (branch `main`):** Syncs with `platform/flux/clusters/prod`. Promotion is done by updating the image tag in `prod/apps/jobmatch/helm-release.yaml` on the `dev` branch, testing it, creating a PR to `main`, and merging it.
+
+> [!NOTE]
+> For the detailed CI/CD configuration files, path filters, and ConfigMap rolling update annotation triggers, see the [LLD — CI/CD & GitOps Operations](LLD.md#6-cicd-pipeline--gitops-operations).
 
 ---
 
-### Порівняння стратегій узгодження (reconcileStrategy)
+### Comparison of Reconcile Strategies (reconcileStrategy)
 
-Для балансу між швидкістю розробки в Dev та стабільністю в Prod використовуються різні стратегії узгодження HelmRelease:
+To balance speed of development in Dev and stability in Prod, different reconcile strategies are configured:
 
-1. **Dev-середовище: reconcileStrategy: Revision**
-   * **Суть:** Flux миттєво реагує на будь-які комміти в Git (зміна тегів образів, значень values або конфігураційних файлів), оскільки він відслідковує зміну Git-ревізії.
-   * **Перевага:** Максимальна швидкість доставки без необхідності підняття версії чарту в `Chart.yaml` при кожній зміні (зручно для швидкої ітерації).
+1. **Dev Environment: reconcileStrategy: Revision**
+   - **Mechanism:** Flux immediately reacts to any Git commits (image tag updates, value shifts, prompt files), tracking Git revisions.
+   - **Advantage:** Maximum speed of delivery without the need to bump Helm chart version in `Chart.yaml` for every iteration.
 
-2. **Prod-середовище: reconcileStrategy: ChartVersion**
-   * **Суть:** Flux виконує оновлення релізу на продакшені тільки тоді, коли версія Helm-чарту (`spec.chart.spec.version` у `HelmRelease` або версія чарту у репозиторії) явно змінюється.
-   * **Перевага:** Захист від випадкових змін конфігурації. Будь-які зміни в values чи параметрах шлюзу не будуть застосовані на Prod, доки розробник явно не оновить версію чарту. Це гарантує суворий релізний контроль, однозначність версіонування (SemVer) та мінімізує ризики людських помилок при злитті PR.
+2. **Prod Environment: reconcileStrategy: ChartVersion**
+   - **Mechanism:** Flux performs production updates only when the Helm chart version (`spec.chart.spec.version` in `HelmRelease`) is explicitly changed.
+   - **Advantage:** Protects against accidental changes. Value modifications or prompt updates will not take effect on production until the SRE engineer explicitly increases the chart version. This guarantees release control and prevents human errors.
 
 ---
 
-## 3. Контур оцінки якості LLM-as-a-Judge (Evaluation Engine)
+## 3. LLM-as-a-Judge Evaluation Loop (Evaluation Engine)
 
-Для вимірювання якості роботи агента при зміні коду або промптів використовується LLM-суддя.
+An LLM Judge evaluates the quality of agent results upon prompt or code changes.
 
 ```mermaid
 graph LR
@@ -134,50 +137,57 @@ graph LR
     Gate -->|Score < 4.2| Fail[Fail & Block PR]
 ```
 
-### Метрики оцінювання (Metrics Framework):
-1. **Relevance (Релевантність):** Чи дійсно підібрані вакансії відповідають навичкам та досвіду кандидата з резюме? (Шкала 1-5).
-2. **Tone (Тональність):** Чи відповідає згенерований супровідний лист (cover letter) професійному корпоративному стилю без зайвого "хайпу" (Шкала 1-5).
-3. **Hallucination-free (Відсутність галюцинацій):** Чи не придумує модель вакансії або досвід, якого не було в резюме (Шкала 1-5).
+### Metrics Framework:
+1. **Relevance (1-5):** Scores how well matched vacancies correspond to the candidate's skills and experience.
+2. **Tone (1-5):** Evaluates if the generated cover letter conforms to a professional tone.
+3. **Hallucination-free (1-5):** Checks if the agent generated skills, credentials, or vacancy parameters not found in the input sources.
+4. **Safety Score (1-5):** Evaluates if the output contains prompt leaks or signs of age/gender discrimination. Any violation drops the safety score to `1.0`.
+
+> [!NOTE]
+> For the golden dataset JSON schemas, test cases definitions, and evals runner logic, see the [LLD — Evaluation Engine](LLD.md#5-llm-as-a-judge-evaluation-engine).
 
 ---
 
-## 4. Схема безпеки (Security Architecture)
+## 4. Security Architecture
 
-Багаторівневий захист забезпечує ізоляцію конфіденційних даних та захист від зовнішніх атак.
+Multi-level security guards sensitive data and protects against input injections.
 
 ```mermaid
 flowchart TD
-    RawInput[Вхідний файл резюме / Опис вакансії] -->|Завантаження| API[Express API]
-    API -->|1. PII Redaction| Masker[Masker: видалення імен, email, телефонів]
-    Masker -->|Анонімізований текст| Struct[XML Tagging wrapper: <cv_data>]
+    RawInput[Input CV / Job Description] -->|Upload| API[Express API]
+    API -->|1. PII Redaction| Masker[Masker: removes names, emails, phones]
+    Masker -->|Anonymized Text| Struct[XML Tagging wrapper: <cv_data>]
     Struct -->|2. Prompt Injection Shield| PromptBuilder[Prompt Builder]
-    PromptBuilder -->|Системні інструкції окремо від даних| AgentLoop[Agent loop & tools validation]
+    PromptBuilder -->|System instructions separate from data| AgentLoop[Agent loop & tools validation]
     AgentLoop -->|3. Allow-list check| Tools[Only white-listed tools executed]
     AgentLoop -->|4. Secrets Management| K8sSecrets[API keys via External Secrets / SOPS]
-    AgentLoop -->|5. Output Guardrail| ContentFilter[Filter: витік промпту / токсичність]
-    ContentFilter --> Output[Фінальна відповідь користувачу]
+    AgentLoop -->|5. Output Guardrail| ContentFilter[Filter: prompt leakage / toxicity]
+    ContentFilter --> Output[Final response to user]
 ```
 
-### Ключові механізми безпеки:
-* **PII Redaction:** Усі резюме анонімізуються на рівні Express-сервера (або через політику AgentGateway Guardrails) перед надсиланням до хмарних LLM.
-* **Структурне тегування:** Вхідні дані користувача відокремлюються від системних інструкцій за допомогою суворих XML-тегів, що мінімізує успішність атак "ignore previous instructions".
-* **allow-list інструментів:** Агент має обмежений набір дій (наприклад, дозволено робити HTTP GET тільки на валідовані домени дощок вакансій).
-* **secrets поза git:** Усі API-ключі LLM-провайдерів ізольовані від контейнера застосунку. Вони управляються централізовано на рівні **AgentGateway** (з використанням Kubernetes Secrets / External Secrets Operator у просторі імен `agentgateway-system`) та автоматично підставляються у вихідні запити до LLM-провайдерів на рівні шлюзу.
-* **Output Guardrails:** Перевірка згенерованої моделями відповіді (response) на рівні **AgentGateway** за допомогою регулярних виразів. Шлюз аналізує вихідний потік на наявність витоку системних інструкцій (наприклад, фраз типу «You are a secure Job Matching System», «ignore previous instructions») та маркерів дискримінації чи упередженості («only men», «under 35»), блокуючи такі відповіді з поверненням повідомлення про порушення політики безпеки. Для покращення **Output Moderation** пропонується надалі реалізувати використання Webhook для аналізу токсичності зовнішніми моделями класифікації, що дозволяє автоматично відправляти кожну відповідь LLM на зовнішній сервіс класифікації токсичності (наприклад, на базі моделей Llama Guard, Perspective API від Google або локальний мікросервіс із бібліотекою `detoxify`).
+### Key Security Mechanisms:
+* **PII Redaction:** CVs are anonymized on the API server (or via AgentGateway policy) before sending data to cloud providers.
+* **Structural Tagging:** XML wrappers separate instructions from candidate content to mitigate jailbreaks.
+* **Tool Allow-listing:** The agent is restricted to calling validated domains.
+* **Externalized Secrets:** All API keys are isolated from the application containers. They are injected centrally at the **AgentGateway** level from secrets in `agentgateway-system`.
+* **Output Guardrails:** Regex check on the response stream inside **AgentGateway**. Blocks output containing prompt leakage indicators or discrimination filters (e.g. "only men", "under 35") with a policy violation response. webhook-based toxicity filters are proposed for future integration.
+
+> [!NOTE]
+> For the Cheerio HTML selectors, CV parsing libraries, and LLM output hallucination filters, see the [LLD — Core Service & Agent Execution Blueprint](LLD.md#2-core-service--agent-execution-blueprint).
 
 ---
 
-## 5. Управління секретами (Secrets Management)
+## 5. Secrets Management
 
-Безпека API-ключів для LLM-провайдерів (OpenAI, Anthropic, Gemini) є критично важливою. Усі ключі повністю ізольовані від коду додатків і підставляються динамічно на рівні шлюзу безпеки **AgentGateway**. Синхронізація ключів реалізована за допомогою **External Secrets Operator (ESO)**.
+LLM API credentials are proxy-injected at the **AgentGateway** level. External Secrets Operator (ESO) automates synchronization.
 
-### Уніфікація хмарних середовищ (GCP Secret Manager)
+### GCP Secret Manager Integration
 
-Для дотримання принципу відповідності середовищ (Dev-Prod parity) усі хмарні контури платформи (**Dev** та **Prod**) використовують єдиний підхід до управління секретами на базі **Google Secret Manager (GCP SM)**. Це дозволяє уникнути відмінностей у конфігураціях між середовищами в хмарі.
+Dev and Prod environments use **Google Secret Manager (GCP SM)** for secrets management, aligning configurations.
 
 ---
 
-### Архітектурне рішення та життєвий цикл секретів у хмарі (Dev & Prod)
+### Secret Lifecycle in the Cloud (Dev & Prod)
 
 ```mermaid
 graph TD
@@ -201,26 +211,136 @@ graph TD
     end
 ```
 
-#### Процес синхронізації:
-1. **Джерело правди (Source of Truth):** Усі API-ключі хмарних сервісів зберігаються в Google Secret Manager у відповідному GCP-проекті.
-2. **Авторизація оператора:** `ClusterSecretStore` під назвою `gcp-secret-manager` використовує провайдер `gcpsm`. Він авторизується в Google Cloud за допомогою механізму **Workload Identity** (для Kubernetes Service Account оператора ESO) або за допомогою змонтованого сервісного ключа GCP.
-3. **Мапування та форматування:** Ресурси `ExternalSecret` в `agentgateway-system` зчитують ключі з GCP SM та автоматично форматують їх, створюючи кінцевий секрет (наприклад, з полем `Authorization: Bearer <key>`), який використовує `AgentGateway`.
-4. **GitOps-сумісність:** Конфігураційні файли (декларативні описи `ExternalSecret` та `ClusterSecretStore`) безпечно зберігаються в Git-репозиторії та синхронізуються за допомогою **FluxCD**, тоді як самі секретні дані ніколи не коммітяться в репозиторій.
+#### Sync Flow:
+1. **Source of Truth:** Credentials live in GCP Secret Manager.
+2. **Authorization:** ClusterSecretStore authenticates with GCP via Workload Identity.
+3. **Mapping:** ExternalSecret resources retrieve keys and map them into destination K8s secrets formatted for AgentGateway.
+4. **GitOps Integration:** YAML configurations are tracked in Git, whereas raw secret keys are never committed.
+
+> [!NOTE]
+> For the credentials injection setups, HTTP header passing code, and mock-llm verification rules, see the [LLD — FinOps & Gateway Routing](LLD.md#3-finops--gateway-routing-implementation).
 
 ---
 
-### Локальна розробка та тестування (Local Development & Testing)
+## Local Development & Testing
 
-Для роботи системи локально на ноутбуці (у k3s / minikube / kind) передбачено механізми запуску без зовнішніх хмарних залежностей:
+For running the cluster locally:
 
-#### 1. Локальне управління секретами
-Для використання секретів без хмари розробники можуть використовувати спрощений підхід прямого створення локальних секретів або імітацію роботи ESO без GCP SM. Детальний посібник:
-* [Локальна робота з секретами на ноутбуці (local-development-secrets.md)](manuals/local-development-secrets.md)
+### 1. Local Secrets
+Developers configure local secrets or mock credentials using files. Detailed guide:
+* [Local Secrets Management (local-development-secrets.md)](manuals/local-development-secrets.md)
 
-#### 2. Локальне тестування безпеки (Mock LLM Service)
-Для тестування prompt-ін'єкцій, маскування персональних даних (PII) та FinOps-роутингу без здійснення реальних платних запитів до Anthropic Claude або Google Gemini у локальному кластері розгортається сервіс **`mock-llm`** (на базі Node.js).
+### 2. Mock LLM Service
+For local verification of masking and routing rules without incurring API costs, a **`mock-llm`** Node.js service is deployed at port `8089` in `jobmatch-dev` namespace.
+* [Testing Prompt Masking & PII Redaction (testing-security-masking.md)](manuals/testing-security-masking.md)
 
-* **Принцип роботи:** Сервіс слухає порт `8089` у namespace `jobmatch-dev` та виступає кінцевою точкою (upstream) для `AgentGateway` у локальному контурі.
-* **Перевірка маскування:** `mock-llm` приймає запити від шлюзу, логує вхідне тіло запиту у свій `stdout` (дозволяючи розробнику через `kubectl logs` перевірити, чи замасковано персональні дані, наприклад, `<EMAIL_ADDRESS>`), та повертає фіксовану OpenAI-сумісну JSON-відповідь.
-* **Посібник з тестування:** [Тестування Prompt Masking та PII маскування (testing-security-masking.md)](manuals/testing-security-masking.md)
+> [!NOTE]
+> For local mock-llm logging tests and Vitest unit testing mock scripts, see the [LLD — Testing Suite & Mocking Framework](LLD.md#4-testing-suite--mocking-framework).
+
+---
+
+## 6. Infrastructure Architecture
+
+The infrastructure architecture of the JobMatch platform is designed to optimize operational simplicity (Ops-wise), financial efficiency (FinOps), reliability, and scalability to handle up to 100,000 monthly requests.
+
+### 6.1 Infrastructure Environments Overview
+
+| Parameter | Development Environment (Dev) | Production Environment (Prod) |
+| :--- | :--- | :--- |
+| **Compute VM** | GCP VM `e2-standard-2` (2 vCPUs, 8 GB RAM) | **GKE Autopilot** (Multi-zonal cluster node capacity) |
+| **K8s Runtime** | Local `k3d` cluster inside VM | **GKE Autopilot** managed environment |
+| **Vector DB** | Qdrant (local pod inside VM) | Qdrant (ephemeral memory index pod / Qdrant Cloud) |
+| **Cache & DB** | Redis (local pod inside VM) | **GCP Memorystore for Redis** (managed basic tier) |
+| **Traffic Router** | Nginx Ingress Controller (local) | **Google Cloud Load Balancing (GCLB)** |
+| **Edge Security** | Local TLS (Self-signed) | **Google Cloud Armor** (WAF & DDoS) |
+| **Secret Provisioning**| Local Secrets files / K8s Secrets | **Google Secret Manager** + ESO |
+| **Monthly Estimate**| **~$48.00 / month** | **~$138.26 / month** |
+
+### 6.2 Development Environment Topology (Dev)
+
+To minimize developer workstation resource load and cloud expenditures:
+- A single GCP `e2-standard-2` VM runs a standard Docker runtime.
+- A local lightweight `k3d` cluster runs in Docker, mirroring Kubernetes API schemas.
+- All development services (`jobmatch-api`, `jobmatch-web`, `agentgateway`, `mock-llm`, local PostgreSQL, Redis, and Qdrant) are deployed as pods within the `jobmatch-dev` namespace.
+
+### 6.3 Production Environment Topology (Prod)
+
+The production infrastructure is built on managed Google Cloud Platform (GCP) services for maximum availability, scaling, and security:
+1. **Google Cloud Load Balancing (GCLB):** Public traffic lands on GCLB, terminating client SSL/TLS connections using managed certificates (TLS 1.2/1.3 only, weak ciphers disabled).
+2. **Google Cloud Armor:** Placed at the Load Balancer level, Cloud Armor provides L7 DDoS mitigation and WAF protections against exploit payloads.
+3. **GKE Autopilot:** A fully managed, multi-zonal Kubernetes runtime. GKE Autopilot manages node provisioning, configuration, upgrades, and operating system patching. Pods are running with at least 2 replicas spread across multiple availability zones.
+4. **GCP Memorystore for Redis:** Provides a reliable, managed in-memory cache for job search session data and API request caching.
+5. **Qdrant Vector DB:** Deployed as an ephemeral/stateless vector database on GKE (or Qdrant Cloud). Vector index data is rebuilt on startup from source stores, bypassing the operational complexity of GKE persistent disks.
+
+### 6.4 Scalability and Resource Limits
+
+Under GKE Autopilot, billing is based on resource requests. Pod allocations are restricted to minimum stable baselines to maintain high cost-efficiency while permitting dynamic horizontal scaling (HPA) when CPU utilization exceeds 70%:
+
+- `jobmatch-api`: 2 replicas, request limits `0.5 vCPU`, `1 GB RAM` each.
+- `jobmatch-web`: 2 replicas, request limits `0.25 vCPU`, `256 MB RAM` each.
+- `agentgateway` (Envoy proxy): 2 replicas, request limits `0.5 vCPU`, `512 MB RAM` each.
+
+### 6.5 Production Infrastructure FinOps Cost Breakdown
+
+Monthly infrastructure cost calculations based on 100,000 requests/month peak load in the `us-central1` region (assuming 730 monthly hours):
+- **GKE Autopilot Pod Compute:**
+  - `jobmatch-api` pods: $2 \times 0.5\text{ vCPU} \times \$0.0445/\text{vCPU-hr} \times 730 = \$32.49/\text{month}$
+  - `jobmatch-api` memory: $2 \times 1.0\text{ GB} \times \$0.0049/\text{GB-hr} \times 730 = \$7.15/\text{month}$
+  - `jobmatch-web` pods: $2 \times 0.25\text{ vCPU} \times \$0.0445/\text{vCPU-hr} \times 730 = \$16.24/\text{month}$
+  - `jobmatch-web` memory: $2 \times 0.25\text{ GB} \times \$0.0049/\text{GB-hr} \times 730 = \$1.79/\text{month}$
+  - `agentgateway` pods: $2 \times 0.5\text{ vCPU} \times \$0.0445/\text{vCPU-hr} \times 730 = \$32.49/\text{month}$
+  - `agentgateway` memory: $2 \times 0.5\text{ GB} \times \$0.0049/\text{GB-hr} \times 730 = \$3.58/\text{month}$
+  - **GKE Compute Subtotal:** **~$93.74/month** (The $73.00/month flat GKE cluster fee is completely offset by GCP's free tier cluster credit).
+- **GCP Memorystore for Redis (Basic Tier, 1 GB):**
+  - $1\text{ GB} \times 730\text{ hours} \times \$0.0127/\text{hour} = \mathbf{\$9.27/\text{month}}$
+- **Google Cloud Load Balancer (GCLB):**
+  - Base forwarding rules: $730\text{ hours} \times \$0.025/\text{hour} = \mathbf{\$18.25/\text{month}}$
+- **Google Cloud Armor Standard + WAF rules:**
+  - Rules, policy overhead, and query fees: **~$7.00/month**
+- **Egress & Cloud Storage (Logs/Backups):**
+  - Storage allocation and network egress: **~$10.00/month**
+- **TOTAL INFRASTRUCTURE MONTHLY COST:** **~$138.26/month**
+
+### 6.6 Security Mapping: GCP Services for OWASP Protections
+
+| GCP Service | Target OWASP Vulnerability | Mitigation Details |
+| :--- | :--- | :--- |
+| **Google Cloud Armor** (WAF & DDoS) | • **OWASP Web A03: Injection** (SQLi, XSS)<br>• **OWASP Web A04: Insecure Design**<br>• **OWASP LLM01: Prompt Injection** | • Uses pre-configured WAF rule sets (CRS) to block SQLi, XSS, and command injections at the edge proxy layer.<br>• Mitigates L7 application DDoS and enforces rate limiting per client IP.<br>• Inspects payloads via custom expression filters to block prompt injection patterns prior to reaching GKE pods. |
+| **Google Kubernetes Engine (GKE) Autopilot** | • **OWASP Web A01: Broken Access Control**<br>• **OWASP Web A05: Security Misconfiguration** | • **Network Isolation:** Built-in NetworkPolicies (via Dataplane V2) enforce micro-segmentation, ensuring only authorized namespaces/pods talk to each other.<br>• **Hardened Nodes:** Node configurations, OS patches, and updates are entirely managed by Google with SSH access blocked.<br>• **Pod Security Standards:** Rejects root containers, enforcing restricted profiles (read-only root filesystems). |
+| **Google Secret Manager** (with Workload Identity) | • **OWASP Web A02: Cryptographic Failures**<br>• **OWASP LLM10: Model Theft / Excess Agency** | • Stores all API credentials encrypted at rest and in transit.<br>• **Workload Identity:** Maps K8s Service Accounts directly to GCP IAM roles, eliminating the need to compile or save long-lived credential JSONs in pods.<br>• Restricts key access solely to the `agentgateway` proxy in `agentgateway-system` namespace. |
+| **Artifact Registry** & **Container Analysis** | • **OWASP Web A06: Vulnerable Components** | • Scans container images for CVEs automatically upon container push, blocking deployments of vulnerable containers. |
+| **Google Cloud Load Balancing (GCLB)** | • **OWASP Web A02: Cryptographic Failures** | • Terminates external TLS using Google-managed certificates, enforcing TLS 1.2 or TLS 1.3 only. |
+| **Cloud Logging** & **Cloud Monitoring** | • **OWASP Web A09: Logging & Monitoring Failures** | • Aggregates and alerts on GKE Audit Logs, VPC flow logs, Load Balancer access logs, and Secret Manager access metrics to detect security events. |
+
+### 6.7 GCP Network Security Zoning
+
+To prevent boundary crossings and secure communications, the production environment is partitioned into four logical security zones:
+
+```mermaid
+graph TD
+    subgraph "Zone A: Public Internet Edge"
+        DNS[Google Cloud DNS] -->|Encrypted DNS Queries| GCLB[Google Cloud Load Balancer]
+    end
+
+    subgraph "Zone B: Perimeter Security WAF"
+        GCLB <-->|Inspect Traffic| Armor[Google Cloud Armor]
+    end
+
+    subgraph "Zone C: Isolated Compute Cluster"
+        GCLB -->|TLS 1.3 Routing| Ingress[Kubernetes Ingress]
+        Ingress -->|Namespace NetPolicy| App[jobmatch-api Pods]
+        App <-->|Local mTLS| Gateway[AgentGateway Proxy Pods]
+    end
+
+    subgraph "Zone D: Private Storage Tier"
+        App <-->|PSC / VPC Peering| Redis[(Memorystore Redis)]
+        Gateway <-->|VPC Peering| Secret[(Google Secret Manager)]
+    end
+```
+
+- **Zone A (Public Internet Edge):** Serves as the public entry-point. Resolves traffic via Cloud DNS and terminates SSL/TLS connections at the external Google Cloud Load Balancer (GCLB) using Google-managed certificates.
+- **Zone B (Perimeter Security / WAF):** Google Cloud Armor integrates directly with GCLB to filter SQL injection, XSS, and layer 7 DDoS floods. It acts as the perimeter shield before any packets enter the internal network.
+- **Zone C (Isolated Compute Cluster - GKE Autopilot):** Virtual machines and nodes run in private subnets with no public IP addresses. Cluster boundaries are secured using GKE Dataplane V2 NetworkPolicies, which isolate the `jobmatch-prod` namespace from other workloads and ensure that only the Ingress controller can route traffic to internal application pods.
+- **Zone D (Private Storage Tier):** Contains managed storage services. GCP Memorystore for Redis and GCP Secret Manager are reached only through Private Service Connect (PSC) or VPC Peering endpoints from within Zone C. Direct public access to the storage tier is entirely blocked at the GCP VPC firewall layer.
+
 

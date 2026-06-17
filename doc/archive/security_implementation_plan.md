@@ -92,7 +92,7 @@ graph TD
 
 ### 1. Інтеграція AgentGateway & Secrets Management
 
-#### [NEW] [agentgateway-config.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-config.yaml)
+#### [NEW] [agentgateway-config.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-config.yaml)
 * Створити конфігурацію для `agentgateway` у нашому GitOps каталозі:
   * Налаштувати провайдерів (OpenAI / Gemini) на рівні шлюзу.
   * Інтегрувати секрети: шлюз зчитує `OPENAI_API_KEY` та `GEMINI_API_KEY` з Kubernetes Secret `llm-secrets` (створеного External Secrets Operator) та підставляє їх у заголовки `Authorization` при перенаправленні запитів до LLM.
@@ -128,7 +128,7 @@ graph TD
 
 ### 2. Впровадження LLM Guardrails (PII Masking & Prompt Injection)
 
-#### [MODIFY] [agentgateway-config.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-config.yaml)
+#### [MODIFY] [agentgateway-config.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-config.yaml)
 * Додати політику **Guardrails** для трафіку LLM:
   * **Regex-фільтри PII**: автоматичний пошук та заміна пошт (`[EMAIL_MASKED]`), телефонів (`[PHONE_MASKED]`) та лінків (`[URL_MASKED]`) у тілі запитів до моделей.
   * **Prompt Shield**: перевірка вхідного тексту на спроби перезапису системних інструкцій (на кшталт "ignore previous instructions").
@@ -138,7 +138,7 @@ graph TD
 
 ### 3. Захист від Prompt Injection (XML-тегування у промптах)
 
-#### [MODIFY] [llm.ts](../app/server/services/llm.ts)
+#### [MODIFY] [llm.ts](../../app/server/services/llm.ts)
 * Оновити `CV_SYSTEM` та `JOB_SYSTEM` промпти.
 * У функціях `extractCvStructured` та `runAgenticJobMatch` огортати динамічні вхідні дані резюме та запитів користувача у XML-теги, наприклад:
   ```typescript
@@ -150,14 +150,14 @@ graph TD
 
 ### 4. Автоматична перевірка безпеки у CI/CD (Skills Scanner & Gitleaks)
 
-#### [NEW] [check-skills-security.mjs](../scripts/check-skills-security.mjs)
+#### [NEW] [check-skills-security.mjs](../../scripts/check-skills-security.mjs)
 * Створити скрипт статичного аналізу файлів промптів у папках `app/skills/` та `app/prompts/`:
   * Сканування на захардкоджені секрети (API-ключі, токени).
   * Перевірка на наявність небезпечних інструкцій або застарілих плейсхолдерів.
   * Перевірка того, що динамічні дані користувача у промптах огортаються в XML-теги.
   * Повертає `exit 1` у разі виявлення ризиків безпеки.
 
-#### [MODIFY] [deploy.yml](../.github/workflows/deploy.yml)
+#### [MODIFY] [deploy.yml](../../.github/workflows/deploy.yml)
 * Додати крок `Run Gitleaks Scan` на самому початку пайплайну для перевірки всіх коммітів на наявність секретів:
   ```yaml
         - name: Run Gitleaks Scan

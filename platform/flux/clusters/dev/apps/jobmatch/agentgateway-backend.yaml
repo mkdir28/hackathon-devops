@@ -128,8 +128,8 @@ spec:
       - providers:
           - name: gemini-flash
             gemini:
-              #model: gemini-3.5-flash
-              model: gemini-2.5-flash-lite
+              model: gemini-3.5-flash
+              #model: gemini-2.5-flash-lite # using it because gemini key limitation 
 #            host: mock-llm.jobmatch-dev.svc.cluster.local
 #            port: 8089
 #            path: /post

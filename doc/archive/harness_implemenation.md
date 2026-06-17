@@ -1,6 +1,6 @@
 # Scout SRE Harness Implementation Plan
 
-This plan describes the architectural design and implementation tasks to transform the Scout Job Searcher prototype into a secure, production-grade, and cost-controlled system. It directly addresses the requirements of [hackathon-task.md](./hackathon-task.md) and integrates the existing Kubernetes workload topology.
+This plan describes the architectural design and implementation tasks to transform the Scout Job Searcher prototype into a secure, production-grade, and cost-controlled system. It directly addresses the requirements of [hackathon-task.md](../hackathon-task.md) and integrates the existing Kubernetes workload topology.
 
 ---
 
@@ -119,7 +119,7 @@ graph TD
 ## User Review Required
 
 > [!IMPORTANT]
-> 1. **Перенесення логіки з додатку до kagent**: Вся логіка запуску агента з файлу [JobSearchAgent.ts](../app/server/agent/JobSearchAgent.ts) переноситься в маніфест `jobmatch-agent.yaml` та MCP-сервер.
+> 1. **Перенесення логіки з додатку до kagent**: Вся логіка запуску агента з файлу [JobSearchAgent.ts](../../app/server/agent/JobSearchAgent.ts) переноситься в маніфест `jobmatch-agent.yaml` та MCP-сервер.
 > 2. **Активація Evals гейту в GitHub Actions**: Скрипт `run-evals.mjs` стане обов'язковим блокуючим кроком (baseline `4.2`) для перевірки змін у коді та декларативних промптах/скілах.
 > 3. **Параметри маскування PII**: У плані закладено маскування Email, Phone, SSN та лінків на профілі розробників. Будь ласка, підтвердьте, чи потрібно маскувати ПІБ кандидата.
 
@@ -129,16 +129,16 @@ graph TD
 
 ### 1. Harness Engineering & Agent Architecture (kagent & Qdrant)
 
-#### [NEW] [mcp-server.yaml](../platform/flux/clusters/dev/apps/jobmatch/mcp-server.yaml)
+#### [NEW] [mcp-server.yaml](../../platform/flux/clusters/dev/apps/jobmatch/mcp-server.yaml)
 * Створити опис `RemoteMCPServer` для підключення інструментів роботи з базою вакансій та резюме.
 * Оголосити інструменти: `search_jobs`, `tailor_cv`, `draft_cover_letter`.
 
-#### [NEW] [jobmatch-agent.yaml](../platform/flux/clusters/dev/apps/jobmatch/jobmatch-agent.yaml)
+#### [NEW] [jobmatch-agent.yaml](../../platform/flux/clusters/dev/apps/jobmatch/jobmatch-agent.yaml)
 * Описати декларативного агента `Agent` CRD (`kagent.dev/v1alpha2`) для виконання бізнес-логіки Scout.
 * Перенести системні інструкції в поле `declarative.systemMessage`.
 * Підключити створений MCP-сервер з інструментами.
 
-#### [MODIFY] [deployment-api.yaml](../platform/helm/jobmatch/templates/deployment-api.yaml)
+#### [MODIFY] [deployment-api.yaml](../../platform/helm/jobmatch/templates/deployment-api.yaml)
 * Додати передачу змінної середоваща `GATEWAY_URL` в контейнер бекенду.
 * Підмонтувати Skills через ConfigMap для динамічного оновлення без перезапуску подів.
 
@@ -146,7 +146,7 @@ graph TD
 
 ### 2. Platform Security & Dynamic Routing (AgentGateway, Guardrails & Secrets)
 
-#### [NEW] [agentgateway-policy.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)
+#### [NEW] [agentgateway-policy.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml)
 * Створити ресурс політик `AgentgatewayPolicy` у просторі імен `agentgateway-system`.
 * Налаштувати **Prompt Guard (Request)**:
   * Вбудовані фільтри для `Email`, `PhoneNumber`, `Ssn`.
@@ -177,7 +177,7 @@ graph TD
                 value: "json(request.body).model"
     ```
 
-#### [NEW] [agentgateway-route.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-route.yaml)
+#### [NEW] [agentgateway-route.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-route.yaml)
 * Створити `HTTPRoute` для інтелектуальної маршрутизації за назвою моделі:
   * Налаштувати правила відповідності (matches) на основі заголовка `x-gateway-model-name`.
   * Маршрутизувати дешеві завдання (`gemini-*`, `gpt-4o-mini`, `flash` тощо) на Gemini:
@@ -210,7 +210,7 @@ graph TD
               port: 443
     ```
 
-#### [NEW] [agentgateway-backend.yaml](../platform/flux/clusters/dev/apps/jobmatch/agentgateway-backend.yaml)
+#### [NEW] [agentgateway-backend.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-backend.yaml)
 * Створити ресурси `AgentgatewayBackend` для Claude та Gemini.
 * Налаштувати безпечне читання API-ключів через посилання `secretRef` на K8s Secret `llm-secrets` (key: `gemini-api-key` для Gemini):
   ```yaml
@@ -235,21 +235,21 @@ graph TD
 
 ### 3. SDLC, Evals & CI/CD Pipeline
 
-#### [NEW] [ci-cd.yml](../.github/workflows/ci-cd.yml)
+#### [NEW] [ci-cd.yml](../../.github/workflows/ci-cd.yml)
 * Додати автоматичний запуск `node evals/run-evals.mjs` на етапі CI перед збіркою Docker-образу.
 * Якщо LLM-as-a-Judge фіксує середню оцінку нижче `4.2/5.0`, збірка завершується з помилкою.
 
-#### [MODIFY] [dataset.json](../evals/dataset.json)
+#### [MODIFY] [dataset.json](../../evals/dataset.json)
 * Додати негативні тест-кейси: резюме зі спробою Prompt Injection та резюме з відкритими PII для перевірки роботи маскування.
 
 ---
 
 ### 4. Architectural Records & Documentation
 
-#### [MODIFY] [ADR.md](./ADR.md#adr-008-інтеграція-уніфікованого-контуру-штучного-інтелекту-platform-ai-harness)
+#### [MODIFY] [ADR.md](../ADR.md#adr-008-інтеграція-уніфікованого-контуру-штучного-інтелекту-platform-ai-harness)
 * Architectural Decision Record: Обґрунтування вибору kagent для життєвого циклу агентів, AgentGateway для проксіювання та Qdrant для семантичної пам'яті (додано як ADR-008).
 
-#### [MODIFY] [HLD.md](./HLD.md)
+#### [MODIFY] [HLD.md](../HLD.md)
 * High-Level Solution Design: Опис архітектури платформи, взаємодія компонентів та схема руху даних (Mermaid діаграми оновлено та інтегровано в загальний HLD).
 
 ---

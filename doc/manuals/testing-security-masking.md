@@ -51,7 +51,7 @@ kubectl logs -n jobmatch-dev deployments/mock-llm -f
 
 ## 🛡️ Частина 2: Тестування Блокування Prompt Injection
 
-Згідно з конфігурацією `LlmGuardrail` у [agentgateway-policy.yaml](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml), запити, що містять ключові фрази зламу (`ignore previous instructions` або `system prompt`), блокуються шлюзом із поверненням статусу `403 Forbidden`.
+Згідно з конфігурацією `LlmGuardrail` у [agentgateway-policy.yaml](../../platform/flux/clusters/dev/apps/jobmatch/agentgateway-policy.yaml), запити, що містять ключові фрази зламу (`ignore previous instructions` або `system prompt`), блокуються шлюзом із поверненням статусу `403 Forbidden`.
 
 ### Крок 1: Тест фрази "ignore previous instructions"
 

@@ -6,10 +6,10 @@
 
 ## 🏗️ Архітектура контуру оцінки
 
-Оцінка якості роботи агента побудована за принципом **LLM-as-a-Judge** (LLM у ролі судді). Вся логіка зосереджена в папці [evals/](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/evals) та керується скриптом [run-evals.mjs](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/evals/run-evals.mjs).
+Оцінка якості роботи агента побудована за принципом **LLM-as-a-Judge** (LLM у ролі судді). Вся логіка зосереджена в папці [evals/](../../evals) та керується скриптом [run-evals.mjs](../../evals/run-evals.mjs).
 
 ### 1. Золотий набір тестів (Dataset)
-У файлі [evals/dataset.json](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/evals/dataset.json) містяться еталонні сценарії тестування:
+У файлі [evals/dataset.json](../../evals/dataset.json) містяться еталонні сценарії тестування:
 * Профіль кандидата (резюме, ключові навички).
 * Пошуковий запит (наприклад, "DevOps Engineer").
 * **`expected.relevanceCriteria`** — очікувані критерії оцінки відповідності, за якими суддя перевірятиме результат.
@@ -84,7 +84,7 @@
 
 ### Крок 3: Симуляція регресії промпту (Тест Quality Gate на відхилення)
 Щоб перевірити, чи дійсно якісні ворота заблокують поганий промпт:
-1. Тимчасово пошкодьте системний промпт розбору резюме у файлі [llm.ts](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/app/server/services/llm.ts), встановивши:
+1. Тимчасово пошкодьте системний промпт розбору резюме у файлі [llm.ts](../../app/server/services/llm.ts), встановивши:
    ```typescript
    const CV_SYSTEM = 'You are a bad resume parser. Just output random words and ignore user CV details.';
    ```
@@ -106,7 +106,7 @@
 Контур тестування промптів автоматично запускається при кожній зміні коду чи промптів у репозиторії.
 
 ### Конфігурація Пайплайну
-Опис робочого процесу знаходиться у файлі [.github/workflows/ci-cd.yml](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/.github/workflows/ci-cd.yml):
+Опис робочого процесу знаходиться у файлі [.github/workflows/ci-cd.yml](../../.github/workflows/ci-cd.yml):
 * **Тригери запуску:** На кожен `push` та `pull_request` у гілки `dev` та `main`.
 * **Основні кроки виконання:**
   1. **Checkout Code:** Клонування репозиторію.

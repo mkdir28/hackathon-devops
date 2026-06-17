@@ -112,7 +112,7 @@ GitHub має вбудований безкоштовний функціонал
 3. Задайте шаблон імені гілки (наприклад, `main` або `dev`).
 4. Увімкніть опцію **Require status checks to pass before merging** (Вимагати успішного проходження перевірок стану перед злиттям).
 5. У пошуковому рядку перевірок стану знайдіть та додайте назву джоби з нашого робочого процесу GitHub Actions:
-   - `Gitleaks, Lint, Typecheck, Evals` (це назва джоби `quality-gate` у нашому файлі [.github/workflows/cicd.yml](file:///Users/pokhrime/work/Docs/Tranings/DevOpsIntensive/Hackathon/hackathon-devops/.github/workflows/cicd.yml)).
+   - `Gitleaks, Lint, Typecheck, Evals` (це назва джоби `quality-gate` у нашому файлі [.github/workflows/cicd.yml](../../.github/workflows/cicd.yml)).
 6. Увімкніть **Require branches to be up to date before merging** (якщо потрібно).
 7. Натисніть **Save changes** (Зберегти зміни).
 

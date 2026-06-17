@@ -45,7 +45,7 @@ secret name: GEMINI_API_KEY    →      llm-secrets                    env: GEMI
 
 ## 2. Why GitOps via FluxCD HelmRelease for ESO?
 
-Manual `helm install` works for a one-off bootstrap, but this repository already uses **FluxCD + Git as the single source of truth** (see [ADR-003](ADR.md) and [cicd.md](cicd.md)). ESO is delivered the same way as the application for these reasons:
+Manual `helm install` works for a one-off bootstrap, but this repository already uses **FluxCD + Git as the single source of truth** (see [ADR-003](../ADR.md) and [cicd.md](cicd.md)). ESO is delivered the same way as the application for these reasons:
 
 | Reason | Explanation |
 |--------|-------------|
@@ -408,6 +408,6 @@ platform/flux/clusters/dev/
 
 ## 10. Related Documents
 
-- [ADR-006 — Security Controls](ADR.md)
-- [Architecture Implementation Roadmap — Phase 5](roadmap.md)
+- [ADR-006 — Security Controls](../ADR.md)
+- [Architecture Implementation Roadmap — Phase 5](../roadmap.md)
 - [CI/CD & GitOps Guide](cicd.md)
