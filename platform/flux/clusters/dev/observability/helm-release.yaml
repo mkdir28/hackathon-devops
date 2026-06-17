@@ -16,8 +16,14 @@ spec:
   values:
     grafana:
       enabled: true
+      service:
+        type: NodePort
+        nodePort: 3000
     prometheus:
       enabled: true
       prometheusSpec:
         podMonitorSelectorNilUsesHelmValues: false
         podMonitorNamespaceSelector: {}
+      service:
+        type: NodePort
+        nodePort: 9090
