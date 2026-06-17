@@ -13,6 +13,7 @@ resources:
   - agentgateway-backend.yaml
   - mock-llm.yaml
   - podmonitor.yaml
+  - prometheus-rbac.yaml
 
 labels:
   - includeSelectors: true
