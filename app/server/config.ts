@@ -43,7 +43,7 @@ export const config = {
   geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
 
   anthropicApiKey: anthropicKey,
-  claudeModel: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+  claudeModel: process.env.CLAUDE_MODEL || 'claude-haiku-4-5',
 
   jobSearchConcurrency: Number(process.env.JOB_SEARCH_CONCURRENCY || 4),
   jobSearchResultsPerBoard: Number(process.env.JOB_SEARCH_RESULTS_PER_BOARD || 8),
