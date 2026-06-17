@@ -339,9 +339,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(agentgateway_requests_total[5m])) or vector(0)",
+          "expr": "sum by (backend) (rate(agentgateway_gen_ai_client_token_usage_sum[5m])) or vector(0)",
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{backend}}",
           "range": true,
           "refId": "A"
         }
