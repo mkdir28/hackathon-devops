@@ -18,7 +18,7 @@ spec:
       enabled: true
       service:
         type: NodePort
-        nodePort: 3000
+        nodePort: 30000
     prometheus:
       enabled: true
       prometheusSpec:
@@ -26,4 +26,4 @@ spec:
         podMonitorNamespaceSelector: {}
       service:
         type: NodePort
-        nodePort: 9090
+        nodePort: 30900
