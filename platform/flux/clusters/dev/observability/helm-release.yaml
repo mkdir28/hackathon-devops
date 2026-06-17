@@ -16,7 +16,6 @@ spec:
   values:
     grafana:
       enabled: true
-      adminPassword: "admin"
     prometheus:
       enabled: true
       prometheusSpec:
