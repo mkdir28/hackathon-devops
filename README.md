@@ -135,13 +135,12 @@ The repository is built as a monorepo with clear separation of concerns:
 │   ├── dataset.json          # Golden dataset (including security test cases)
 │   └── run-evals.mjs         # LLM-as-a-Judge evaluation execution script
 ├── doc/                      # Project documentation
+│   ├── archive/              # Legacy reference guides
+│   ├── manuals/              # Developer guides & manuals
+│   ├── ukr/                  # Ukrainian translations (ADR, HLD, LLD)
 │   ├── ADR.md                # Architectural Decision Records
 │   ├── HLD.md                # High-Level Solution Design
-│   ├── cicd.md               # Detailed description of CI/CD & GitOps
-│   ├── eval.md               # Evals Quality Gate documentation
-│   ├── finops-llm.md         # Detailed description of FinOps routing
-│   ├── Tests.md              # Testing guide
-│   └── ProjectCodeMindMap.md # Code relationships map and exploration
+│   └── LLD.md                # Low-Level Design
 ```
 
 ---
@@ -223,8 +222,5 @@ The script will evaluate the test cases from `dataset.json` against these metric
 
 * 📑 **[Architectural Decision Records (ADR)](doc/ADR.md)** — Architectural choices justification, FinOps analysis, model selection, and unit cost calculations.
 * 📐 **[High-Level Solution Design (HLD)](doc/HLD.md)** — System architecture, Agent life cycle, and deployment diagrams in Kubernetes.
-* 🔄 **[CI/CD & GitOps Guide](doc/archive/cicd.md)** — Detailed description of FluxCD, tag updates, and automatic rollouts.
-* 🧪 **[Evaluation Engine Guide](doc/archive/eval.md)** — Evaluation framework setup, test cases, and LLM-as-a-Judge scoring details.
-* 💸 **[FinOps LLM Routing Guide](doc/archive/finops-llm.md)** — Detailed description of dynamic routing based on task names (x-gateway-task-name) and model suggestions.
-* 🧪 **[Testing Guide](doc/archive/Tests.md)** — Guide for local unit and integration testing (Vitest, mocking, and coverage).
-* 🗺️ **[Project Code Mind Map](doc/archive/ProjectCodeMindMap.md)** — Map and overview of code relationships and structure.
+* 🔧 **[Low-Level Design (LLD)](doc/LLD.md)** — Granular code architecture mapping, API request/response schemas, testing suite specifications, and CI/CD/GitOps operations.
+* 🗄️ **[Archived Reference Guides](doc/archive/)** — Legacy/detailed manuals for CI/CD, evaluation engine setups, FinOps routing rules, testing blueprints, and project code mind maps.
