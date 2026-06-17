@@ -52,7 +52,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: llm-secrets
-                  key: anthropic-api-key
+                  key: claude-api-key
                   optional: true
           {{- if .Values.api.resources }}
           resources:

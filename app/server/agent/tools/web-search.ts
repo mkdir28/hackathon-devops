@@ -88,10 +88,7 @@ async function geminiWebSearch(
   query: string,
   limit: number
 ): Promise<RawJobListing[]> {
-  const client = new GoogleGenAI({
-    apiKey: config.geminiApiKey || 'mock-key',
-    ...(process.env.GATEWAY_URL ? { httpOptions: { baseUrl: process.env.GATEWAY_URL } } : {}),
-  });
+  const client = new GoogleGenAI({ apiKey: config.geminiApiKey });
   const prompt = buildSearchPrompt(board, query, limit);
 
   const response = await client.models.generateContent({
@@ -129,12 +126,10 @@ async function openaiWebSearch(
   limit: number
 ): Promise<RawJobListing[]> {
   const prompt = buildSearchPrompt(board, query, limit);
-  const baseUrl = process.env.GATEWAY_URL || 'https://api.openai.com';
-  const resolvedUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/responses` : `${baseUrl}/v1/responses`;
-  const res = await fetch(resolvedUrl, {
+  const res = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${config.openaiApiKey || 'mock-key'}`,
+      Authorization: `Bearer ${config.openaiApiKey}`,
       'Content-Type': 'application/json',
       'Accept-Encoding': 'identity',
     },
@@ -173,19 +168,7 @@ async function claudeWebSearch(
   query: string,
   limit: number
 ): Promise<RawJobListing[]> {
-  if (process.env.GATEWAY_URL) {
-    // The AgentGateway's Anthropic parser does not currently support the native 'web_search_20250305' tool variant
-    // (throwing a 503 marshal error). We fall back to Gemini's native web search, which is fully supported by the gateway.
-    return geminiWebSearch(board, query, limit);
-  }
-
-  const resolvedBaseURL = process.env.GATEWAY_URL
-    ? (process.env.GATEWAY_URL.endsWith('/v1') ? process.env.GATEWAY_URL : `${process.env.GATEWAY_URL}/v1`)
-    : undefined;
-  const client = new Anthropic({
-    apiKey: config.anthropicApiKey || 'mock-key',
-    baseURL: resolvedBaseURL,
-  });
+  const client = new Anthropic({ apiKey: config.anthropicApiKey });
   const prompt = buildSearchPrompt(board, query, limit);
 
   const message = await client.messages.create({
@@ -224,17 +207,15 @@ export async function webSearchJobs(
     throw new Error('Web search requires a real LLM provider with native search (Gemini, OpenAI, or Claude).');
   }
 
-  const hasGateway = Boolean(process.env.GATEWAY_URL);
-
   switch (llm.provider) {
     case 'gemini':
-      if (!config.geminiApiKey && !hasGateway) throw new Error('GEMINI_API_KEY is required for Gemini web search.');
+      if (!config.geminiApiKey) throw new Error('GEMINI_API_KEY is required for Gemini web search.');
       return geminiWebSearch(board, query, limit);
     case 'openai':
-      if (!config.openaiApiKey && !hasGateway) throw new Error('OPENAI_API_KEY is required for OpenAI web search.');
+      if (!config.openaiApiKey) throw new Error('OPENAI_API_KEY is required for OpenAI web search.');
       return openaiWebSearch(board, query, limit);
     case 'claude':
-      if (!config.anthropicApiKey && !hasGateway) throw new Error('ANTHROPIC_API_KEY is required for Claude web search.');
+      if (!config.anthropicApiKey) throw new Error('ANTHROPIC_API_KEY is required for Claude web search.');
       return claudeWebSearch(board, query, limit);
     default:
       throw new Error(`Unsupported LLM provider for web search: ${llm.provider}`);
