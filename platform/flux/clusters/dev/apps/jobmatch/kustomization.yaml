@@ -15,6 +15,9 @@ resources:
   - mock-llm.yaml
   - podmonitor.yaml
   - prometheus-rbac.yaml
+  - dashboard.json
+  - grafana-repo.yaml 
+  - loki.yaml
 
 labels:
   - includeSelectors: true
