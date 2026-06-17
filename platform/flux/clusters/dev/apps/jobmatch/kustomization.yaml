@@ -17,7 +17,7 @@ resources:
   - prometheus-rbac.yaml
   - dashboard.json
   - grafana-repo.yaml 
-  - loki.yaml
+  - observability-routes.yaml
 
 labels:
   - includeSelectors: true

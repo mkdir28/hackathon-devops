@@ -16,14 +16,14 @@ spec:
   values:
     grafana:
       enabled: true
-      service:
-        type: NodePort
-        nodePort: 30000
+      grafana.ini:
+        server:
+          root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+          serve_from_sub_path: true
     prometheus:
       enabled: true
       prometheusSpec:
         podMonitorSelectorNilUsesHelmValues: false
         podMonitorNamespaceSelector: {}
-      service:
-        type: NodePort
-        nodePort: 30900
+      externalUrl: "http://34.118.95.22/prometheus"
+      routePrefix: /
