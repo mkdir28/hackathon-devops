@@ -18,6 +18,10 @@ spec:
       enabled: true
       service:
         type: ClusterIP
+    sidecar:
+        datasources:
+          enabled: true
+          defaultDatasourceScrapeFromSidecar: false # Забороняємо сайдкарам перебивати дефолт
     prometheus:
       enabled: true
       prometheusSpec:
