@@ -527,7 +527,7 @@ subjects:
 
 ### Grafana Dashboard Auto-Import Configuration (`kustomization.yaml`)
 
-The custom LLM dashboard is stored as `dashboard.json`. To import it automatically without exposing credentials, Kustomize packages it dynamically using `configMapGenerator` under `platform/flux/clusters/dev/apps/jobmatch/kustomization.yaml`:
+The custom LLM dashboard is stored as `dashboard.json`. To import it automatically without exposing credentials, Kustomize packages it dynamically using `configMapGenerator` under `platform/flux/clusters/dev/observability/kustomization.yaml`:
 
 ```yaml
 configMapGenerator:

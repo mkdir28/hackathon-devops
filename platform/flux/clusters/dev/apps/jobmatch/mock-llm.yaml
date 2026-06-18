@@ -26,7 +26,7 @@ spec:
                 let body = "";
                 req.on("data", chunk => body += chunk);
                 req.on("end", () => {
-                  console.log("\n=== RECEIVED MASKED REQUEST BODY ===\n", body, "\n====================================\n");
+                  console.log("=== RECEIVED MASKED REQUEST BODY ===\n" + body + "\n====================================");
                   res.writeHead(200, { "Content-Type": "application/json" });
                   res.end(JSON.stringify({
                     choices: [
