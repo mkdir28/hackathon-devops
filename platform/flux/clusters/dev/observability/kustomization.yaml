@@ -5,7 +5,6 @@ resources:
   - helm-release.yaml
   - loki.yaml
   - grafana-ingress.yaml
-  - dashboard.json
 
 configMapGenerator:
   - name: jobmatch-llm-dashboard
