@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # JobMatch Platform — AI-Powered Job Matching Engine
 
 Welcome to the **JobMatch** platform repository — an intelligent job matching assistant based on AI agents, designed to demonstrate SRE, DevOps, GitOps, and AI safety practices (Prompt Security & Evals).
@@ -223,3 +224,6 @@ The script will evaluate the test cases from `dataset.json` against these metric
 * 📑 **[Architectural Decision Records (ADR)](doc/ADR.md)** — Architectural choices justification, FinOps analysis, model selection, and unit cost calculations.
 * 📐 **[High-Level Solution Design (HLD)](doc/HLD.md)** — System architecture, Agent life cycle, and deployment diagrams in Kubernetes.
 * 🔧 **[Low-Level Design (LLD)](doc/LLD.md)** — Granular code architecture mapping, API request/response schemas, testing suite specifications, and CI/CD/GitOps operations.
+=======
+# hackathon-devops
+>>>>>>> 29d29d0 (Initial commit)
