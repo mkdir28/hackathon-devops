@@ -8,10 +8,10 @@ metadata:
 spec:
   interval: 1m0s
   ref:
-    branch: dev
+    branch: main
   secretRef:
     name: flux-system
-  url: ssh://git@github.com/mkdir28/hackathon-devops.git
+  url: ssh://git@github.com/mkdir28/hackathon-devops
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
