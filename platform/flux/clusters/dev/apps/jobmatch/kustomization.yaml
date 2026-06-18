@@ -15,7 +15,6 @@ resources:
   - mock-llm.yaml
   - podmonitor.yaml
   - prometheus-rbac.yaml
-  - dashboard.json
   - grafana-repo.yaml 
   - observability-routes.yaml
 
@@ -23,14 +22,3 @@ labels:
   - includeSelectors: true
     pairs:
       environment: development
-
-configMapGenerator:
-  - name: jobmatch-llm-dashboard
-    namespace: jobmatch-dev
-    files:
-      - llm-monitoring.json=dashboard.json 
-    options:
-      labels:
-        grafana_dashboard: "1"
-generatorOptions:
-  disableNameSuffixHash: true

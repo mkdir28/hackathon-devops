@@ -5,3 +5,15 @@ resources:
   - helm-release.yaml
   - loki.yaml
   - grafana-ingress.yaml
+  - dashboard.json
+
+configMapGenerator:
+  - name: jobmatch-llm-dashboard
+    namespace: jobmatch-dev
+    files:
+      - llm-monitoring.json=dashboard.json 
+    options:
+      labels:
+        grafana_dashboard: "1"
+generatorOptions:
+  disableNameSuffixHash: true
