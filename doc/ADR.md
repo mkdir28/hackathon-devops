@@ -357,43 +357,21 @@ The JobMatch platform leverages semantic search algorithms comparing resume embe
 Approved
 
 ### Context
-Understanding the operation, latency, cost, logs, and safety of an LLM-enabled application is critical for both security and operational reliability. Specifically, we need to track:
-1. **Metrics:** Request volume, latency, token usage, and blocked prompt injections exposed by the Envoy-based `AgentGateway` at `/stats/prometheus` in the `agentgateway-system` namespace.
-2. **Logs:** Application logs, Gateway proxy logs, and cluster-wide system logs for debugging and auditing.
-3. **Dashboard Access:** A secure routing path to the Grafana user interface under a unified `/grafana` subpath on port 80.
-
-Scraping metrics, forwarding logs, configuring RBAC across namespace borders, and importing dashboards dynamically without service crashes present significant setup challenges. Specifically, multiple dashboard or datasource sidecar providers trying to claim default status can crash Grafana's startup/import sequence.
+Understanding the operation, latency, cost, logs, and safety of an LLM-enabled application is critical for security and operational reliability. We need a standardized way to scrape gateway metrics across namespaces, aggregate system logs, provide secure external dashboard access, and prevent data source collisions that can crash Grafana.
 
 ### Decision
-1. **Scraping Architecture (Prometheus Operator):**
-   - Deploy `kube-prometheus-stack` via FluxCD HelmRelease in the `jobmatch-dev` namespace.
-   - Configure Prometheus with `podMonitorSelectorNilUsesHelmValues: false` and `podMonitorNamespaceSelector: {}` to scrape `PodMonitor` resources from any namespace in the cluster.
-   - Deploy a custom `PodMonitor` resource (`agentgateway-external-monitor`) in `jobmatch-dev` namespace. This `PodMonitor` is configured to match pods in namespace `agentgateway-system` with the label `app.kubernetes.io/name: agentgateway-external` and scrape their metrics from port `metrics` at path `/stats/prometheus` every 15 seconds.
-2. **Log Aggregation Stack (Loki & Promtail):**
-   - Deploy the `loki-stack` Helm chart (version 2.10.2) from the Grafana Helm Repository to the `jobmatch-dev` namespace.
-   - Enable Loki persistent storage (5Gi size) and configure Promtail to run as a DaemonSet to automatically harvest, tag, and forward logs across all pods and namespaces to Loki.
-3. **Grafana Ingress & Prefix Routing (Traefik):**
-   - Expose the Grafana UI externally at `/grafana` via Ingress on entrypoint `web` (port 80).
-   - Configure a Traefik `Middleware` (`grafana-stripprefix` with action `stripPrefix`) to strip the `/grafana` subpath prefix before routing requests to the `kube-prometheus-stack-grafana` ClusterIP service.
-4. **Data Source Integration & Crash Prevention Safeguards:**
-   - Configure Loki's Grafana data source flag `isDefault: false` to ensure Loki does not conflict with Prometheus.
-   - Set `sidecar.datasources.defaultDatasourceScrapeFromSidecar: false` in the `kube-prometheus-stack` Helm values. This forces the sidecar selector to ignore dynamic defaults, preventing container startup and dashboard import loops from crashing due to duplicate default datasource definitions.
-5. **Cross-Namespace RBAC Permissions:**
-   - Grant the Prometheus ServiceAccount (`kube-prometheus-stack-prometheus` in the `jobmatch-dev` namespace) access to scrape pods and endpoints inside the `agentgateway-system` namespace.
-   - Provision a custom Kubernetes `Role` (`prometheus-k8s-allow-gateway`) and a `RoleBinding` (`prometheus-k8s-allow-gateway-binding`) in the `agentgateway-system` namespace to permit read operations (`get`, `list`, `watch`) on `pods`, `services`, and `endpoints`.
-6. **Automated Grafana Dashboard Import:**
-   - Define a custom Grafana dashboard (`dashboard.json`) containing panels for Request Volume, LLM Latency, Token Consumption, and Prompt Injection Blocks.
-   - Use Kustomize's `configMapGenerator` in `platform/flux/clusters/dev/apps/jobmatch/kustomization.yaml` to dynamically build a ConfigMap named `jobmatch-llm-dashboard` containing the dashboard JSON.
-   - Apply the label `grafana_dashboard: "1"` to the ConfigMap, which the Grafana sidecar automatically detects to import the dashboard into the Grafana UI.
+1. **Metrics Scraping:** Deploy `kube-prometheus-stack` via FluxCD in `jobmatch-dev` namespace. Scraping is managed dynamically across namespaces via a custom `PodMonitor` targetting Envoy metrics at `/stats/prometheus` in `agentgateway-system`.
+2. **Log Aggregation:** Deploy the `loki-stack` Helm chart (Loki + Promtail) to collect, index, and forward container logs cluster-wide.
+3. **Ingress Routing:** Route public Grafana UI traffic through Traefik Ingress at `/grafana` using middleware to strip path prefixes before reaching the service.
+4. **Collision Prevention:** Set Loki's `isDefault: false` and configure `sidecar.datasources.defaultDatasourceScrapeFromSidecar: false` in Prometheus stack values to prevent Grafana from crashing due to sidecar default datasource conflicts.
+5. **Cross-Namespace RBAC:** Grant read-only access (`get`, `list`, `watch` on pods/endpoints) in `agentgateway-system` to the Prometheus ServiceAccount in `jobmatch-dev`.
+6. **Automated Dashboards:** Package the custom LLM dashboard (`dashboard.json`) into a ConfigMap labeled `grafana_dashboard: "1"` via Kustomize to auto-import it into Grafana.
 
 ### Consequences
 - **Pros:**
-  - **Comprehensive Observability:** Combines metrics (Prometheus) and logs (Loki + Promtail) in a unified Grafana UI for full troubleshooting capability.
-  - **Decoupled Architecture:** Scraping configuration (`PodMonitor`) is managed declaratively, allowing Prometheus to discover endpoints dynamically without hardcoded target lists.
-  - **Safe UI Access:** Traefik Middleware allows clean subpath routing (`/grafana`) at the edge without modifying internal service ports or configs.
-  - **Vendor & Sidecar Stability:** Hard-disabling sidecar default scrapes and marking Loki as non-default prevents Grafana dashboard load crashes.
-  - **Security Isolation:** The cross-namespace access is strictly scoped via Kubernetes RBAC, granting read-only permissions for scraping endpoints without exposing admin/write roles.
-  - **Ops Simplicity:** Custom dashboards are maintained as Git versioned JSON resources, automatically synchronized and loaded into Grafana on deployment without manual importing.
+  - Full observability covering metrics (Prometheus) and logs (Loki/Promtail) in a unified interface.
+  - Safe, decoupled routing and dynamic dashboard configuration.
+  - Stabilized Grafana instance protected from sidecar data source conflicts.
 - **Cons:**
-  - Requires maintaining RBAC definitions across namespace borders (`jobmatch-dev` and `agentgateway-system`).
-  - Increased local cluster compute footprint with Loki and Promtail running alongside the Prometheus stack.
+  - Requires maintaining RBAC definitions across namespace boundaries.
+  - Increased local cluster compute resource footprint.
