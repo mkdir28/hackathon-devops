@@ -1,0 +1,7 @@
+[allowlist]
+  description = "false positives in docs"
+  files = ['doc/cicd.md']
+  files = ['doc/archive/cicd.md']
+  files = ['doc/archive/ukr/cicd.md']
+  
+  
