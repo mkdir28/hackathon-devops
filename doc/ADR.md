@@ -6,19 +6,19 @@ This document captures the key architectural decisions made to ensure the maturi
 
 ## Architectural Decision Records Index (ADR Index)
 
-| ID | Decision Title | Status |
-|----|----------------|--------|
-| **ADR-001** | Monorepo with clear division of environments (`app`, `platform`, `evals`) | Approved |
-| **ADR-002** | Separation of GitOps environments (clusters) by separate directories | Approved |
-| **ADR-003** | Two-stage CI/CD strategy based on GitHub Actions and GitOps (FluxCD) | Approved |
-| **ADR-004** | Prompt and skill versioning as code (PromptOps & Decoupled Delivery) | Approved |
-| **ADR-005** | Quality Gates in CI via LLM-as-a-Judge | Approved |
+| ID          | Decision Title                                                                             | Status   |
+| -------------| --------------------------------------------------------------------------------------------| ----------|
+| **ADR-001** | Monorepo with clear division of environments (`app`, `platform`, `evals`)                  | Approved |
+| **ADR-002** | Separation of GitOps environments (clusters) by separate directories                       | Approved |
+| **ADR-003** | Two-stage CI/CD strategy based on GitHub Actions and GitOps (FluxCD)                       | Approved |
+| **ADR-004** | Prompt and skill versioning as code (PromptOps & Decoupled Delivery)                       | Approved |
+| **ADR-005** | Quality Gates in CI via LLM-as-a-Judge                                                     | Approved |
 | **ADR-006** | Multi-level security protection: PII Redaction, Input Sanitization, and Secrets Management | Approved |
-| **ADR-007** | Multi-provider LLM architecture and hybrid financial routing (FinOps) | Approved |
-| **ADR-008** | Integration of a unified artificial intelligence loop (Platform AI Harness) | Approved |
-| **ADR-009** | Cloud Infrastructure Selection (Development & Production Environments) | Approved |
-| **ADR-010** | Ephemeral Vector Database Architecture for Semantic Memory | Approved |
-| **ADR-011** | Observability and Monitoring Architecture for AI Platform and Security Gateway | Approved |
+| **ADR-007** | Multi-provider LLM architecture and hybrid financial routing (FinOps)                      | Approved |
+| **ADR-008** | Integration of a unified artificial intelligence loop (Platform AI Harness)                | Approved |
+| **ADR-009** | Cloud Infrastructure Selection (Development & Production Environments)                     | Approved |
+| **ADR-010** | Ephemeral Vector Database Architecture for Semantic Memory                                 | Approved |
+| **ADR-011** | Observability and Monitoring Architecture for AI Platform and Security Gateway             | Approved |
 
 ---
 
@@ -100,8 +100,14 @@ graph TD
 ```
 
 ### Consequences
-- **Pros:** Full transparency, automatic rollbacks via git revert, no need to store Kubeconfig in CI secrets.
+- **Pros:**
+  - **Full transparency & audit trail:** All deployment states are recorded in Git.
+  - **No Kubeconfig in CI:** GitHub Actions does not need direct access to cluster APIs, enhancing security.
+  - **Environment-aligned Rollback Strategy:**
+    - **Development (Dev):** Quick, fully declarative rollback via `git revert` (since Dev uses `reconcileStrategy: Revision`).
+    - **Production (Prod):** Tiered rollback approach featuring standard declarative rollback via version-bump PRs to `main` for release control, or emergency manual bypass using temporary Flux suspension (`flux suspend`) followed by direct cluster rollback (`helm rollback`) during outages. See [LLD — Rollback Runbook and Procedures](LLD.md#rollback-runbook-and-procedures) for detailed operational steps.
 - **Cons:** Requires repository write access (`contents: write`) for GitHub Actions.
+
 
 ---
 

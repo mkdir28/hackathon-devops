@@ -466,6 +466,52 @@ FluxCD syncs changes from Git into target namespaces:
   - **Dev Environment (`reconcileStrategy: Revision`):** FluxCD immediately applies any commits from the `dev` branch.
   - **Prod Environment (`reconcileStrategy: ChartVersion`):** FluxCD blocks updates until the Helm chart version in the release manifest is explicitly bumped, ensuring controlled production deployments.
 
+### Rollback Runbook and Procedures
+
+To restore service during deployment failures or outages, the platform uses two primary rollback vectors:
+
+#### 1. Development (Dev) Rollback (Fully Declarative)
+Since the Dev environment tracking is configured with `reconcileStrategy: Revision`, any change to the `dev` branch is instantly synchronized by FluxCD.
+- **Action:** Revert the breaking commit on the `dev` branch:
+  ```bash
+  git checkout dev
+  git revert <breaking_commit_sha>
+  git push origin dev
+  ```
+- **Sync:** FluxCD immediately detects the new Git revision and applies the reverted manifests to the cluster (updating image tags or configurations).
+
+#### 2. Production (Prod) Rollbacks
+
+##### Scenario A: Declarative Rollback (Standard / Non-Outage)
+For standard rollbacks where there is no active system degradation:
+1. **Revert configuration:** Perform a `git revert` of the target commit on the `dev` branch, then open a Pull Request to `main`.
+2. **Bump Chart Version:** In the same PR, increment the Helm chart version (`spec.chart.spec.version` in the production HelmRelease or the underlying Chart.yaml). This is required because Prod uses `reconcileStrategy: ChartVersion`.
+3. **Merge PR:** Once the PR is merged to `main`, FluxCD detects the version bump and reconciles the cluster to the reverted state.
+
+##### Scenario B: Emergency Fast Rollback (Manual Bypass during Active Outage)
+In an active production outage, waiting for PR review, merge, and GHA pipelines is too slow. SREs can manually bypass GitOps temporarily:
+1. **Suspend Flux Reconciliation:**
+   Temporarily stop FluxCD from managing the target release to prevent it from correcting the manual cluster state drift:
+   ```bash
+   flux suspend hr jobmatch-prod -n jobmatch-prod
+   ```
+2. **Rollback Release via Helm:**
+   Identify the last stable release revision and rollback:
+   ```bash
+   # List recent release revisions
+   helm history jobmatch-prod -n jobmatch-prod
+   
+   # Rollback to the target stable revision (e.g. revision 12)
+   helm rollback jobmatch-prod 12 -n jobmatch-prod
+   ```
+3. **Align Git and Resume Reconcile:**
+   Once service is restored:
+   - Perform a declarative `git revert` on the Git repository and merge it to the `main` branch to match the rolled-back state.
+   - Resume FluxCD synchronization to re-establish GitOps governance:
+     ```bash
+     flux resume hr jobmatch-prod -n jobmatch-prod
+     ```
+
 ---
 
 ## 7. Observability & Monitoring Implementation Details
