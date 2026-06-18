@@ -1,0 +1,41 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: jobmatch-dev
+  namespace: jobmatch-dev
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./platform/helm/jobmatch
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+      reconcileStrategy: Revision
+  install:
+    remediation:
+      retries: 3
+  values:
+    global:
+      environment: stage
+    api:
+      replicaCount: 1
+      image:
+        repository: ghcr.io/mkdir28/jobmatch-api
+        tag: "v1.0.0-affc98f"
+      env:
+        LLM_PROVIDER: "auto"
+    web:
+      replicaCount: 1
+      image:
+        repository: ghcr.io/mkdir28/jobmatch-web
+        tag: "v1.0.0-affc98f"
+    redis:
+      enabled: true
+      image:
+        registry: docker.io
+        repository: bitnami/redis
+        tag: latest
+    qdrant:
+      enabled: true

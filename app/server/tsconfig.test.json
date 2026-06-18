@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

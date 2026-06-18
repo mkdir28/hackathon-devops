@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ns.yaml
+  - helm-release.yaml
+  - external-secret.yaml
+  - cluster-secret-store.yaml
+  - agentgateway-config.yaml
+  - mcp-server.yaml
+  - jobmatch-agent.yaml
+  - agentgateway-policy.yaml
+  - agentgateway-route.yaml
+  - agentgateway-backend.yaml
+  - mock-llm.yaml
+  - podmonitor.yaml
+  - prometheus-rbac.yaml
+  - grafana-repo.yaml 
+  - observability-routes.yaml
+
+labels:
+  - includeSelectors: true
+    pairs:
+      environment: production

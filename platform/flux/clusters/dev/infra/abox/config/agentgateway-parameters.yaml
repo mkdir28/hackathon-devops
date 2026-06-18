@@ -1,0 +1,10 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: debug-gateway-parameters
+  namespace: agentgateway-system
+spec:
+  logging:
+    #level: "info,h2=info,rustls=info,agent_xds=info,store=info,agentgateway=debug"
+    level: info
+    

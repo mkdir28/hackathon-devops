@@ -75,7 +75,7 @@ Or set `LLM_PROVIDER=openai`, `gemini`, or `claude` to force a provider (that ke
 | `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Gemini model name (free tier + web search) |
 | `ANTHROPIC_API_KEY` | Optional | — | Anthropic API key |
 | `CLAUDE_API_KEY` | Optional | — | Alias for `ANTHROPIC_API_KEY` |
-| `CLAUDE_MODEL` | Optional | `claude-sonnet-4-20250514` | Claude model name |
+| `CLAUDE_MODEL` | Optional | `claude-haiku-4-5` | Claude model name |
 
 **API server**
 

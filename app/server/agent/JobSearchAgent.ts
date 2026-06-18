@@ -63,6 +63,7 @@ async function runBoardTool(
     return fromWeb;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error(`[agent] Error fetching board ${board.name} (${board.id}):`, err);
     logs.push({
       ...logBase,
       tool: board.parser === 'web-only' ? 'web_search_jobs' : 'fetch_job_board',
@@ -133,4 +134,36 @@ export async function runJobSearchAgent(
       listingsFound: merged.length,
     },
   };
+}
+
+export async function searchRawJobs(
+  query: string,
+  countryCode: string = 'WORLDWIDE'
+): Promise<RawJobListing[]> {
+  assertJobSearchReady();
+
+  const boards = selectBoardsForCountry(
+    countryCode,
+    MAX_BOARDS_PER_SEARCH
+  );
+
+  if (boards.length === 0) {
+    return [];
+  }
+
+  const logs: AgentToolCallLog[] = [];
+  const batchSize = config.jobSearchConcurrency;
+  const collected: RawJobListing[] = [];
+
+  for (let i = 0; i < boards.length; i += batchSize) {
+    const chunk = boards.slice(i, i + batchSize);
+    const chunkResults = await Promise.all(
+      chunk.map((board) => runBoardTool(board, query, logs))
+    );
+    for (const list of chunkResults) {
+      collected.push(...list);
+    }
+  }
+
+  return dedupeListings(collected);
 }

@@ -11,8 +11,9 @@
     "resolveJsonModule": true,
     "declaration": false,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "types": ["node", "express", "cors", "multer"]
   },
   "include": ["./**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "tests", "vitest.config.ts"]
 }

@@ -1,0 +1,14 @@
+{
+  "name": "job-match-evals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run-evals.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "openai": "^4.77.0"
+  }
+}

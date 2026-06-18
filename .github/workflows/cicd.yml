@@ -1,0 +1,244 @@
+name: CI/CD Quality Gate & Deploy
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # Job 1: Detect what files have changed
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code_changed: ${{ steps.analyze.outputs.code_changed }}
+      prompts_changed: ${{ steps.analyze.outputs.prompts_changed }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analyze Changes
+        id: analyze
+        run: |
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only)
+          fi
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          CODE_CHANGED="false"
+          PROMPTS_CHANGED="false"
+          
+          for file in $CHANGED_FILES; do
+            if [[ $file == app/skills/* ]] || [[ $file == app/prompts/* ]] || [[ $file == platform/helm/jobmatch/skills/* ]] || [[ $file == evals/* ]]; then
+              PROMPTS_CHANGED="true"
+            else
+              CODE_CHANGED="true"
+            fi
+          done
+          
+          echo "code_changed=$CODE_CHANGED" >> $GITHUB_OUTPUT
+          echo "prompts_changed=$PROMPTS_CHANGED" >> $GITHUB_OUTPUT
+          
+          echo "Outputs set: code_changed=$CODE_CHANGED, prompts_changed=$PROMPTS_CHANGED"
+
+  # Job 2: Gitleaks + Quality Gate (Linting, typecheck and LLM Prompts evaluation)
+  quality-gate:
+    name: Gitleaks, Lint, Typecheck, Evals
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            app/package-lock.json
+            app/server/package-lock.json
+
+      - name: Install Workspace Dependencies
+        run: |
+          npm ci --prefix app
+          npm ci --prefix app/server
+          npm install --prefix evals
+
+      - name: Run Linting
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        run: |
+          npm run lint --prefix app
+
+      - name: Run Typecheck
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        run: |
+          npm run typecheck --prefix app
+
+      - name: Compile Backend Server (Required for Evals)
+        if: needs.detect-changes.outputs.prompts_changed == 'true'
+        run: |
+          npm run build:api --prefix app
+
+      - name: Run Evals Quality Gate
+        if: needs.detect-changes.outputs.prompts_changed == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          npm test --prefix evals
+
+  # Job 3: CD (Build Docker Containers, Push to GHCR, and trigger GitOps Rollout)
+  build-and-deploy:
+    name: Build & Push to GHCR & GitOps Rollout
+    runs-on: ubuntu-latest
+    needs: [detect-changes, quality-gate]
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ADMIN_PAT }} # Bypasses branch protection rules for automated commits
+          fetch-depth: 0
+
+      - name: Auto-Sync Skills (Prompts)
+        if: needs.detect-changes.outputs.prompts_changed == 'true'
+        run: |
+          chmod +x scripts/sync-skills.sh
+          ./scripts/sync-skills.sh
+          if [ -n "$(git status --porcelain platform/helm/jobmatch/skills)" ]; then
+            if [ "${{ github.ref_name }}" = "dev" ]; then
+              git config --global user.name "github-actions[bot]"
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              git add platform/helm/jobmatch/skills
+              git commit -m "chore(gitops): auto-sync skills prompts from app/skills [skip ci]"
+              git push origin dev
+            else
+              echo "ERROR: platform/helm/jobmatch/skills is out of sync with app/skills. Please run ./scripts/sync-skills.sh locally and commit."
+              exit 1
+            fi
+          fi
+
+      - name: Set up Node.js
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            app/package-lock.json
+            app/server/package-lock.json
+
+      - name: Install Workspace Dependencies (for compilation)
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        run: |
+          npm ci --prefix app
+          npm ci --prefix app/server
+
+      - name: Compile Backend Server
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        run: |
+          npm run build:api --prefix app
+
+      - name: Extract Package Version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' app/server/package.json)
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get Short Git SHA
+        id: sha
+        run: |
+          echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Determine Registry Tags
+        id: config
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.short }}"
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
+          WEB_TAGS="ghcr.io/$OWNER/jobmatch-web:$VERSION-$SHA,ghcr.io/$OWNER/jobmatch-web:latest"
+          API_TAGS="ghcr.io/$OWNER/jobmatch-api:$VERSION-$SHA,ghcr.io/$OWNER/jobmatch-api:latest"
+          
+          echo "web_tags=$WEB_TAGS" >> $GITHUB_OUTPUT
+          echo "api_tags=$API_TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Frontend (Web)
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: ${{ steps.config.outputs.web_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Backend (API)
+        if: needs.detect-changes.outputs.code_changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/Dockerfile.api
+          push: true
+          tags: ${{ steps.config.outputs.api_tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update Dev Image Tag in Git
+        if: github.ref_name == 'dev' && needs.detect-changes.outputs.code_changed == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.short }}"
+          TAG="$VERSION-$SHA"
+          
+          # Update tag in dev helm-release.yaml
+          yq -i ".spec.values.api.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
+          yq -i ".spec.values.web.image.tag = \"$TAG\"" platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
+          
+          # Commit and push dev image tag update
+          if [ -n "$(git status --porcelain platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml)" ]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add platform/flux/clusters/dev/apps/jobmatch/helm-release.yaml
+            git commit -m "chore(gitops): update dev image tag to $TAG [skip ci]"
+            git push origin dev
+          fi

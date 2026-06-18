@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "jobmatch.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "jobmatch.labels" . | nindent 4 }}
+    app: {{ include "jobmatch.fullname" . }}-api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "jobmatch.selectorLabels" . | nindent 6 }}
+      app: {{ include "jobmatch.fullname" . }}-api
+  template:
+    metadata:
+      labels:
+        {{- include "jobmatch.selectorLabels" . | nindent 8 }}
+        app: {{ include "jobmatch.fullname" . }}-api
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-skills.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: api
+          envFrom:
+            - configMapRef:
+                name: jobmatch-gateway-config
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.api.port }}
+          env:
+            - name: PORT
+              value: "{{ .Values.api.port }}"
+            - name: LLM_PROVIDER
+              value: "{{ .Values.api.env.LLM_PROVIDER }}"
+            - name: SKILLS_DIR
+              value: "{{ .Values.api.env.SKILLS_DIR }}"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: gemini-api-key
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: claude-api-key
+                  optional: true
+          {{- if .Values.api.resources }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: skills-volume
+              mountPath: {{ .Values.api.env.SKILLS_DIR }}
+      volumes:
+        - name: skills-volume
+          configMap:
+            name: {{ include "jobmatch.fullname" . }}-skills
