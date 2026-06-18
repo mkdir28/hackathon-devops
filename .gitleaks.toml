@@ -1,0 +1,9 @@
+[allowlist]
+description = "Global allowlist to exclude specific files from all scans"
+
+# Exclude specific files or paths completely
+paths = [
+    '''doc/cicd.md''',
+    '''doc/archive/cicd.md''',
+    '''doc/archive/ukr/cicd.md'''
+]
