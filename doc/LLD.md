@@ -465,3 +465,84 @@ FluxCD syncs changes from Git into target namespaces:
 - **Reconcile Strategy Promotion:**
   - **Dev Environment (`reconcileStrategy: Revision`):** FluxCD immediately applies any commits from the `dev` branch.
   - **Prod Environment (`reconcileStrategy: ChartVersion`):** FluxCD blocks updates until the Helm chart version in the release manifest is explicitly bumped, ensuring controlled production deployments.
+
+---
+
+## 7. Observability & Monitoring Implementation Details
+
+This section provides the low-level Kubernetes manifest configurations and dashboard mapping details used to deploy the monitoring architecture.
+
+### PodMonitor Resource Configuration (`podmonitor.yaml`)
+
+The `PodMonitor` is deployed in the `jobmatch-dev` namespace. It instructs the Prometheus Operator to discover and scrape metrics from the Envoy-based `AgentGateway` pods running in the `agentgateway-system` namespace.
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: agentgateway-external-monitor
+  namespace: jobmatch-dev
+spec:
+  namespaceSelector:
+    matchNames:
+      - agentgateway-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-external
+  podMetricsEndpoints:
+  - port: metrics
+    path: /stats/prometheus
+    interval: 15s
+```
+
+### Cross-Namespace RBAC Authorization (`prometheus-rbac.yaml`)
+
+Because the Prometheus server running in `jobmatch-dev` needs to scrape target endpoints in `agentgateway-system`, RBAC permissions must be explicitly granted. A `Role` and `RoleBinding` are created inside `agentgateway-system` namespace, binding the Prometheus ServiceAccount to read-only capabilities on pods and endpoints.
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-k8s-allow-gateway
+  namespace: agentgateway-system
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-k8s-allow-gateway-binding
+  namespace: agentgateway-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-k8s-allow-gateway
+subjects:
+- kind: ServiceAccount
+  name: kube-prometheus-stack-prometheus
+  namespace: jobmatch-dev
+```
+
+### Grafana Dashboard Auto-Import Configuration (`kustomization.yaml`)
+
+The custom LLM dashboard is stored as `dashboard.json`. To import it automatically without exposing credentials, Kustomize packages it dynamically using `configMapGenerator` under `platform/flux/clusters/dev/apps/jobmatch/kustomization.yaml`:
+
+```yaml
+configMapGenerator:
+  - name: jobmatch-llm-dashboard
+    namespace: jobmatch-dev
+    files:
+      - llm-monitoring.json=dashboard.json 
+    options:
+      labels:
+        grafana_dashboard: "1"
+generatorOptions:
+  disableNameSuffixHash: true
+```
+
+#### How it works:
+1. **Dynamic Generation:** Kustomize generates a ConfigMap named `jobmatch-llm-dashboard` with the file key `llm-monitoring.json` holding the JSON dashboard layout.
+2. **Hash Disabling:** The `generatorOptions.disableNameSuffixHash: true` is configured to keep the ConfigMap name static (`jobmatch-llm-dashboard`) rather than generating a randomized hash (e.g., `jobmatch-llm-dashboard-89c2e21`). This prevents Grafana's sidecar from loading duplicate dashboard versions when contents are updated.
+3. **Auto-Import Sidecar:** The label `grafana_dashboard: "1"` is appended to the ConfigMap options. Grafana's dashboard sidecar scans the namespace for ConfigMaps matching this label, extracts the JSON dashboard structure under the `llm-monitoring.json` key, and mounts it dynamically into Grafana's dashboard directory.

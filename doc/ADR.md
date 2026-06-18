@@ -18,6 +18,7 @@ This document captures the key architectural decisions made to ensure the maturi
 | **ADR-008** | Integration of a unified artificial intelligence loop (Platform AI Harness) | Approved |
 | **ADR-009** | Cloud Infrastructure Selection (Development & Production Environments) | Approved |
 | **ADR-010** | Ephemeral Vector Database Architecture for Semantic Memory | Approved |
+| **ADR-011** | Observability and Monitoring Architecture for AI Platform and Security Gateway | Approved |
 
 ---
 
@@ -347,3 +348,34 @@ The JobMatch platform leverages semantic search algorithms comparing resume embe
   - **High Scalability:** Ephemeral compute pods scale horizontally or restart instantly in any availability zone without storage mounting delays.
 - **Cons:**
   - Introduce brief warm-up latency (re-indexing delay) on cold pod restarts before semantic queries can be fully resolved.
+
+---
+
+## ADR-011: Observability and Monitoring Architecture for AI Platform and Security Gateway
+
+### Status
+Approved
+
+### Context
+Understanding the operation, latency, cost, and safety of an LLM-enabled application is critical for both security and operational reliability. Specifically, we need to track metrics like request volume, latency, token usage, and blocked prompt injections. These metrics are exposed by the Envoy-based `AgentGateway` at `/stats/prometheus`. However, scraping metrics across namespaces (`agentgateway-system` and `jobmatch-dev`) in a GitOps-managed cluster requires configuration. We need a standardized way to configure metric scraping, handle cross-namespace RBAC permissions, and auto-import custom monitoring dashboards into Grafana.
+
+### Decision
+1. **Scraping Architecture (Prometheus Operator):**
+   - Deploy `kube-prometheus-stack` via FluxCD HelmRelease in the `jobmatch-dev` namespace.
+   - Configure Prometheus with `podMonitorSelectorNilUsesHelmValues: false` and `podMonitorNamespaceSelector: {}` to scrape `PodMonitor` resources from any namespace in the cluster.
+   - Deploy a custom `PodMonitor` resource (`agentgateway-external-monitor`) in `jobmatch-dev` namespace. This `PodMonitor` is configured to match pods in namespace `agentgateway-system` with the label `app.kubernetes.io/name: agentgateway-external` and scrape their metrics from port `metrics` at path `/stats/prometheus` every 15 seconds.
+2. **Cross-Namespace RBAC Permissions:**
+   - Grant the Prometheus ServiceAccount (`kube-prometheus-stack-prometheus` in the `jobmatch-dev` namespace) access to scrape pods and endpoints inside the `agentgateway-system` namespace.
+   - Provision a custom Kubernetes `Role` (`prometheus-k8s-allow-gateway`) and a `RoleBinding` (`prometheus-k8s-allow-gateway-binding`) in the `agentgateway-system` namespace to permit read operations (`get`, `list`, `watch`) on `pods`, `services`, and `endpoints`.
+3. **Automated Grafana Dashboard Import:**
+   - Define a custom Grafana dashboard (`dashboard.json`) containing panels for Request Volume, LLM Latency, Token Consumption, and Prompt Injection Blocks.
+   - Use Kustomize's `configMapGenerator` in `platform/flux/clusters/dev/apps/jobmatch/kustomization.yaml` to dynamically build a ConfigMap named `jobmatch-llm-dashboard` containing the dashboard JSON.
+   - Apply the label `grafana_dashboard: "1"` to the ConfigMap, which the Grafana sidecar automatically detects to import the dashboard into the Grafana UI.
+
+### Consequences
+- **Pros:**
+  - **Decoupled Architecture:** Scraping configuration (`PodMonitor`) is managed declaratively, allowing Prometheus to discover endpoints dynamically without hardcoded target lists.
+  - **Security Isolation:** The cross-namespace access is strictly scoped via Kubernetes RBAC, granting read-only permissions for scraping endpoints without exposing admin/write roles.
+  - **Ops Simplicity:** Custom dashboards are maintained as Git versioned JSON resources, automatically synchronized and loaded into Grafana on deployment without manual importing.
+- **Cons:**
+  - Requires maintaining RBAC definitions across namespace borders (`jobmatch-dev` and `agentgateway-system`).

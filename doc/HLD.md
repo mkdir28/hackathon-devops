@@ -343,4 +343,41 @@ graph TD
 - **Zone C (Isolated Compute Cluster - GKE Autopilot):** Virtual machines and nodes run in private subnets with no public IP addresses. Cluster boundaries are secured using GKE Dataplane V2 NetworkPolicies, which isolate the `jobmatch-prod` namespace from other workloads and ensure that only the Ingress controller can route traffic to internal application pods.
 - **Zone D (Private Storage Tier):** Contains managed storage services. GCP Memorystore for Redis and GCP Secret Manager are reached only through Private Service Connect (PSC) or VPC Peering endpoints from within Zone C. Direct public access to the storage tier is entirely blocked at the GCP VPC firewall layer.
 
+### 6.8 Observability & Monitoring Architecture
+
+To monitor the performance, cost, and safety of the AI-powered search, the platform implements a standardized observability stack using Prometheus and Grafana.
+
+#### Metrics Collection Flow Diagram
+The Envoy-based `AgentGateway` acts as the security and routing proxy, collecting fine-grained metrics for all LLM interactions. Prometheus scrapes these metrics across namespace boundaries, and Grafana exposes them on a custom dashboard.
+
+```mermaid
+graph TD
+    subgraph "Namespace: agentgateway-system"
+        AGW["AgentGateway Proxy Pods <br> (app: agentgateway-external)"] -->|Exposes Envoy stats| Endpoint["/stats/prometheus <br> (Port: metrics)"]
+    end
+
+    subgraph "Namespace: jobmatch-dev"
+        Prom["Prometheus Operator <br> (kube-prometheus-stack)"] -->|1. Discovers via selector| PM["PodMonitor <br> (agentgateway-external-monitor)"]
+        PM -->|2. Scrapes metrics every 15s| Endpoint
+        Prom -->|3. Feeds metrics| Grafana["Grafana Pod"]
+        
+        Kust["Kustomize configMapGenerator"] -->|4. Generates with label grafana_dashboard: '1'| CM[("ConfigMap: jobmatch-llm-dashboard <br> (contains dashboard.json)")]
+        GrafanaSidecar["Grafana Dashboard Sidecar"] -->|5. Auto-detects label & imports| CM
+        GrafanaSidecar -->|6. Loads dashboard| Grafana
+    end
+    
+    PromSA["Prometheus ServiceAccount <br> (kube-prometheus-stack-prometheus)"] -.->|RBAC: RoleBinding| Role["Role: prometheus-k8s-allow-gateway <br> (in agentgateway-system)"]
+    PM -.->|Authorizes scraping| PromSA
+```
+
+#### Key Monitored Metrics
+The following metrics are collected from Envoy's Prometheus stats and visualized on the dashboard:
+
+| Metric Group | Envoy Metric Name | Description / Dashboard Panel |
+| :--- | :--- | :--- |
+| **Request Volume** | `agentgateway_requests_total` | Tracks total requests routed through the gateway (visualized as request rate over 5m). |
+| **LLM Latency** | `agentgateway_gen_ai_server_request_duration_sum` <br> `agentgateway_gen_ai_server_request_duration_count` | Calculates average LLM response time over 5m (`sum / count`). |
+| **Token Consumption** | `agentgateway_gen_ai_client_token_usage_sum` | Tracks volume of input/output tokens consumed by LLM interactions. |
+| **Prompt Injection Blocks**| `agentgateway_guardrail_checks_total` | Monitors the count of blocked malicious prompt injections or guardrail policy violations. |
+
 
