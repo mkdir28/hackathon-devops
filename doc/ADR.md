@@ -146,7 +146,7 @@ Traditional unit tests cannot score generative quality (cover letters) or semant
 
 ### Consequences
 - **Pros:** Automated regression testing for AI quality and security.
-- **Cons:** Token costs during CI and longer pipeline run times.
+- **Cons:** Token costs during CI and longer pipeline run times (mitigated by path-filtering in CI so that the evaluation suite only runs when prompt markdown files, skills, or evals code are modified; see [ADR-004](#adr-004-prompt-and-skill-versioning-as-code-promptops--decoupled-delivery)).
 
 ---
 
