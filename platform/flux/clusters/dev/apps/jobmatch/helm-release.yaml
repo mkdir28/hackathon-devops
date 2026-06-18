@@ -25,7 +25,7 @@ spec:
         repository: ghcr.io/mkdir28/jobmatch-api
         tag: "v1.0.0-8138241"
       env:
-        LLM_PROVIDER: "gemini"
+        LLM_PROVIDER: "auto"
     web:
       replicaCount: 1
       image:
