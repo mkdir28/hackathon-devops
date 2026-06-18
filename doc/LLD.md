@@ -546,3 +546,102 @@ generatorOptions:
 1. **Dynamic Generation:** Kustomize generates a ConfigMap named `jobmatch-llm-dashboard` with the file key `llm-monitoring.json` holding the JSON dashboard layout.
 2. **Hash Disabling:** The `generatorOptions.disableNameSuffixHash: true` is configured to keep the ConfigMap name static (`jobmatch-llm-dashboard`) rather than generating a randomized hash (e.g., `jobmatch-llm-dashboard-89c2e21`). This prevents Grafana's sidecar from loading duplicate dashboard versions when contents are updated.
 3. **Auto-Import Sidecar:** The label `grafana_dashboard: "1"` is appended to the ConfigMap options. Grafana's dashboard sidecar scans the namespace for ConfigMaps matching this label, extracts the JSON dashboard structure under the `llm-monitoring.json` key, and mounts it dynamically into Grafana's dashboard directory.
+
+### Loki Stack Resource Configuration (`loki.yaml`)
+
+The `loki-stack` HelmRelease deploys Loki and Promtail in the `jobmatch-dev` namespace. Loki persistence is limited to 5Gi to maintain cost efficiency, and Promtail aggregates container logs across the cluster and ships them to Loki.
+
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki-stack
+  namespace: jobmatch-dev
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: loki-stack
+      version: "2.10.2"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  values:
+    loki:
+      enabled: true
+      persistence:
+        enabled: true
+        size: 5Gi
+    promtail:
+      enabled: true
+    grafana:
+      loki:
+        datasource:
+          isDefault: false
+```
+
+> [!NOTE]
+> The `grafana.loki.datasource.isDefault: false` setting ensures that Prometheus remains the default data source in the Grafana UI, preventing conflict issues in dashboard panels.
+
+### Grafana Ingress & Middleware Configuration (`grafana-ingress.yaml`)
+
+Traffic routing to the Grafana UI is exposed via a Traefik Ingress resource matching the `/grafana` subpath prefix. To prevent internal web applications from breaking due to subpath prefixes, a Traefik `Middleware` is configured to strip the `/grafana` prefix before reaching the Grafana service.
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: grafana-stripprefix
+  namespace: jobmatch-dev
+spec:
+  stripPrefix:
+    prefixes:
+      - /grafana
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kube-prometheus-stack-grafana
+  namespace: jobmatch-dev
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: jobmatch-dev-grafana-stripprefix@kubernetescrd
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: kube-prometheus-stack-grafana
+            port:
+              number: 80
+```
+
+### Sidecar Datasource Safeguards Configuration (`helm-release.yaml`)
+
+To support stable dashboard sidecar imports and avoid conflicts, the Prometheus Operator stack Helm values (`platform/flux/clusters/dev/observability/helm-release.yaml`) are updated to specify:
+- Service type configurations set to `ClusterIP` for internal routing.
+- Sidecar datasources search enabled.
+- Forced disablement of automatic default datasource overwrite loops.
+
+```yaml
+  values:
+    grafana:
+      enabled: true
+      service:
+        type: ClusterIP
+    sidecar:
+        datasources:
+          enabled: true
+          defaultDatasourceScrapeFromSidecar: false # Forces sidecars to ignore setting this as default
+    prometheus:
+      enabled: true
+      prometheusSpec:
+        podMonitorSelectorNilUsesHelmValues: false
+        podMonitorNamespaceSelector: {}
+      service:
+        type: ClusterIP
+```

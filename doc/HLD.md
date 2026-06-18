@@ -345,25 +345,37 @@ graph TD
 
 ### 6.8 Observability & Monitoring Architecture
 
-To monitor the performance, cost, and safety of the AI-powered search, the platform implements a standardized observability stack using Prometheus and Grafana.
+To monitor the performance, cost, and safety of the AI-powered search, the platform implements a standardized observability stack using Prometheus, Loki, Promtail, and Grafana.
 
-#### Metrics Collection Flow Diagram
-The Envoy-based `AgentGateway` acts as the security and routing proxy, collecting fine-grained metrics for all LLM interactions. Prometheus scrapes these metrics across namespace boundaries, and Grafana exposes them on a custom dashboard.
+#### Observability & Traffic Flow Diagram
+The observability infrastructure monitors metrics and logs, and exposes the Grafana UI under a secured subpath:
+1. **Metrics:** Scraped from the Envoy-based `AgentGateway` proxy namespace into Prometheus.
+2. **Logs:** Collected by a Promtail DaemonSet from all containers across namespaces and forwarded to Loki.
+3. **Ingress & Routing:** Public HTTP requests hitting `/grafana` pass through a Traefik Ingress, where a subpath stripping middleware intercepts and rewrites requests before forwarding them to Grafana.
 
 ```mermaid
 graph TD
+    User([Browser User]) -->|1. HTTP request to /grafana| Ingress["Traefik Ingress <br> (kube-prometheus-stack-grafana)"]
+    Ingress -->|2. Intercepts and strips prefix| Middleware["Traefik Middleware <br> (grafana-stripprefix)"]
+    Middleware -->|3. Routes to port 80| Grafana["Grafana Pod"]
+
     subgraph "Namespace: agentgateway-system"
         AGW["AgentGateway Proxy Pods <br> (app: agentgateway-external)"] -->|Exposes Envoy stats| Endpoint["/stats/prometheus <br> (Port: metrics)"]
+        AGW -->|StdOut/Err Logs| K8sLogs["K8s Container Log Engine"]
     end
 
     subgraph "Namespace: jobmatch-dev"
-        Prom["Prometheus Operator <br> (kube-prometheus-stack)"] -->|1. Discovers via selector| PM["PodMonitor <br> (agentgateway-external-monitor)"]
-        PM -->|2. Scrapes metrics every 15s| Endpoint
-        Prom -->|3. Feeds metrics| Grafana["Grafana Pod"]
+        Prom["Prometheus Operator <br> (kube-prometheus-stack)"] -->|Discovers via selector| PM["PodMonitor <br> (agentgateway-external-monitor)"]
+        PM -->|Scrapes metrics every 15s| Endpoint
+        Prom -->|Provides Metrics Datasource| Grafana
         
-        Kust["Kustomize configMapGenerator"] -->|4. Generates with label grafana_dashboard: '1'| CM[("ConfigMap: jobmatch-llm-dashboard <br> (contains dashboard.json)")]
-        GrafanaSidecar["Grafana Dashboard Sidecar"] -->|5. Auto-detects label & imports| CM
-        GrafanaSidecar -->|6. Loads dashboard| Grafana
+        Loki["Loki Stack <br> (Loki 5Gi Persistence)"] -->|Provides Logs Datasource isDefault: false| Grafana
+        Promtail["Promtail DaemonSet"] -->|Scrapes container logs| K8sLogs
+        Promtail -->|Pushes log streams| Loki
+        
+        Kust["Kustomize configMapGenerator"] -->|Generates with label grafana_dashboard: '1'| CM[("ConfigMap: jobmatch-llm-dashboard <br> (contains dashboard.json)")]
+        GrafanaSidecar["Grafana Dashboard Sidecar"] -->|Auto-detects label & imports| CM
+        GrafanaSidecar -->|Loads dashboard| Grafana
     end
     
     PromSA["Prometheus ServiceAccount <br> (kube-prometheus-stack-prometheus)"] -.->|RBAC: RoleBinding| Role["Role: prometheus-k8s-allow-gateway <br> (in agentgateway-system)"]
