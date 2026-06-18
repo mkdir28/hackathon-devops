@@ -18,12 +18,12 @@ spec:
       enabled: true
       service:
         type: ClusterIP
-    sidecar:
+      sidecar:
         datasources:
           enabled: true
           defaultDatasourceScrapeFromSidecar: false 
 
-    additionalDataSources:
+      additionalDataSources:
         - name: Loki
           type: loki
           access: proxy
