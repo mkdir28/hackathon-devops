@@ -352,6 +352,7 @@ The observability infrastructure monitors metrics and logs, and exposes the Graf
 1. **Metrics:** Scraped from the Envoy-based `AgentGateway` proxy namespace into Prometheus.
 2. **Logs:** Collected by a Promtail DaemonSet from all containers across namespaces and forwarded to Loki.
 3. **Ingress & Routing:** Public HTTP requests hitting `/grafana` pass through a Traefik Ingress, where a subpath stripping middleware intercepts and rewrites requests before forwarding them to Grafana.
+4. **Traffic Mirroring:** Asynchronous request shadowing copies 100% of LLM traffic from `AgentGateway` to `mock-llm` for continuous payload auditing without impact on client latency.
 
 ```mermaid
 graph TD
@@ -376,11 +377,17 @@ graph TD
         Kust["Kustomize configMapGenerator"] -->|Generates with label grafana_dashboard: '1'| CM[("ConfigMap: jobmatch-llm-dashboard <br> (contains dashboard.json)")]
         GrafanaSidecar["Grafana Dashboard Sidecar"] -->|Auto-detects label & imports| CM
         GrafanaSidecar -->|Loads dashboard| Grafana
+        
+        MockLLM["Mock LLM Deployment <br> (mock-llm:8089)"] -->|Logs mirrored request bodies| MockLogs["Container logs"]
     end
+    
+    AGW -->|4. Mirrors 100% request traffic asynchronously| MockLLM
+    RefGrant["ReferenceGrant: allow-gateway-to-mock-llm"] -.->|Authorizes cross-namespace mirroring| AGW
     
     PromSA["Prometheus ServiceAccount <br> (kube-prometheus-stack-prometheus)"] -.->|RBAC: RoleBinding| Role["Role: prometheus-k8s-allow-gateway <br> (in agentgateway-system)"]
     PM -.->|Authorizes scraping| PromSA
 ```
+
 
 #### Key Monitored Metrics
 The following metrics are collected from Envoy's Prometheus stats and visualized on the dashboard:

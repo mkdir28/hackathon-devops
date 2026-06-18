@@ -645,3 +645,77 @@ To support stable dashboard sidecar imports and avoid conflicts, the Prometheus 
       service:
         type: ClusterIP
 ```
+
+### Traffic Mirroring Configuration
+
+To mirror 100% of incoming LLM requests to the local `mock-llm` container in the `jobmatch-dev` namespace for payload auditing, the following resources are deployed:
+
+#### 1. Cross-Namespace Authorization (`ReferenceGrant` in `mock-llm.yaml`)
+
+Since the HTTPRoute resides in `agentgateway-system` and the target Service (`mock-llm`) in `jobmatch-dev`, a `ReferenceGrant` authorizes cross-namespace referencing:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-gateway-to-mock-llm
+  namespace: jobmatch-dev
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: agentgateway-system
+  to:
+    - group: ""
+      kind: Service
+      name: mock-llm
+```
+
+#### 2. Route Mirroring Filters (`agentgateway-route.yaml`)
+
+The `llm-router` is updated with `RequestMirror` filters, which copy and asynchronously forward requests to the `mock-llm` endpoint on port `8089`:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: llm-router
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+    - name: agentgateway-external
+  rules:
+    - matches:
+        - headers:
+            - name: x-gateway-task-name
+              value: "job_match"
+      filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              group: ""
+              kind: Service
+              name: mock-llm
+              namespace: jobmatch-dev
+              port: 8089
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-for-simple-task
+          port: 443
+    - filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              group: ""
+              kind: Service
+              name: mock-llm
+              namespace: jobmatch-dev
+              port: 8089
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: llm-for-complex-task
+          port: 443
+```
+

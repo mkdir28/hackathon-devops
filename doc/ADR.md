@@ -366,12 +366,14 @@ Understanding the operation, latency, cost, logs, and safety of an LLM-enabled a
 4. **Collision Prevention:** Set Loki's `isDefault: false` and configure `sidecar.datasources.defaultDatasourceScrapeFromSidecar: false` in Prometheus stack values to prevent Grafana from crashing due to sidecar default datasource conflicts.
 5. **Cross-Namespace RBAC:** Grant read-only access (`get`, `list`, `watch` on pods/endpoints) in `agentgateway-system` to the Prometheus ServiceAccount in `jobmatch-dev`.
 6. **Automated Dashboards:** Package the custom LLM dashboard (`dashboard.json`) into a ConfigMap labeled `grafana_dashboard: "1"` via Kustomize to auto-import it into Grafana.
+7. **Traffic Mirroring:** Configure the `HTTPRoute` with `RequestMirror` filters to copy and forward 100% of LLM request traffic to `mock-llm` service in `jobmatch-dev` namespace for continuous payload auditing, authorized by a `ReferenceGrant`.
 
 ### Consequences
 - **Pros:**
-  - Full observability covering metrics (Prometheus) and logs (Loki/Promtail) in a unified interface.
+  - Full observability covering metrics (Prometheus), logs (Loki/Promtail), and safe asynchronous request mirroring to a local mock container (`mock-llm`) for payload inspection without performance penalties.
   - Safe, decoupled routing and dynamic dashboard configuration.
   - Stabilized Grafana instance protected from sidecar data source conflicts.
 - **Cons:**
-  - Requires maintaining RBAC definitions across namespace boundaries.
+  - Requires maintaining RBAC definitions and ReferenceGrants across namespace boundaries.
   - Increased local cluster compute resource footprint.
+

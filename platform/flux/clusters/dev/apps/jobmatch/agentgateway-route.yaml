@@ -7,19 +7,38 @@ spec:
   parentRefs:
     - name: agentgateway-external
   rules:
-    # 1. Simple matching tasks (job_match) -> cheep fast model
+    # 1. Simple matching tasks (job_match) -> cheap fast model (mirrored to mock-llm)
     - matches:
         - headers:
             - name: x-gateway-task-name
               value: "job_match"
+      filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              group: ""
+              kind: Service
+              name: mock-llm
+              namespace: jobmatch-dev
+              port: 8089
       backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: llm-for-simple-task
           port: 443
-    # 2. Complex tasks and by default -> expensive model
-    - backendRefs:
+    # 2. Complex tasks and by default -> expensive model (mirrored to mock-llm)
+    - filters:
+        - type: RequestMirror
+          requestMirror:
+            backendRef:
+              group: ""
+              kind: Service
+              name: mock-llm
+              namespace: jobmatch-dev
+              port: 8089
+      backendRefs:
         - group: agentgateway.dev
           kind: AgentgatewayBackend
           name: llm-for-complex-task
           port: 443
+
