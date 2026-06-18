@@ -21,3 +21,7 @@ spec:
         size: 5Gi
     promtail:
       enabled: true
+    grafana:
+      loki:
+        datasource:
+          isDefault: false
