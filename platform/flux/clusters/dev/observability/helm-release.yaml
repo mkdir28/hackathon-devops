@@ -21,7 +21,17 @@ spec:
     sidecar:
         datasources:
           enabled: true
-          defaultDatasourceScrapeFromSidecar: false # Забороняємо сайдкарам перебивати дефолт
+          defaultDatasourceScrapeFromSidecar: false 
+
+    additionalDataSources:
+        - name: Loki
+          type: loki
+          access: proxy
+          url: http://loki-stack:3100
+          jsonData:
+            maxLines: 1000
+          isDefault: false
+
     prometheus:
       enabled: true
       prometheusSpec:
