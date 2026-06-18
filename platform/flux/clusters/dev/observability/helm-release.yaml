@@ -16,6 +16,12 @@ spec:
   values:
     grafana:
       enabled: true
+      persistence:
+        enabled: true
+        type: pvc
+        accessModes:
+          - ReadWriteOnce
+        size: 2Gi
       service:
         type: ClusterIP
       sidecar:
