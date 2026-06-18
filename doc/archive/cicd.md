@@ -38,10 +38,10 @@ The pipeline dynamically extracts the base semantic version from the backend con
 To ensure image identity and simplify promotional workflows, builds from both branches (`dev` and `main`) use a unified tagging format:
 * Format: `<version>-<short-sha>` and `latest`
 * Web:
-  - `ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h`
+  - `ghcr.io/<owner>/jobmatch-web:v1.0.0-gitsha`
   - `ghcr.io/<owner>/jobmatch-web:latest`
 * API:
-  - `ghcr.io/<owner>/jobmatch-api:v1.0.0-e5f6g7h`
+  - `ghcr.io/<owner>/jobmatch-api:v1.0.0-gitsha`
   - `ghcr.io/<owner>/jobmatch-api:latest`
 
 ---

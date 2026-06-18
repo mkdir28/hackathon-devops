@@ -38,10 +38,10 @@ graph LR
 Для забезпечення ідентичності образів та спрощення просування змін, збірки з обох гілок (`dev` та `main`) використовують єдиний формат тегування:
 * Формат: `<version>-<short-sha>` та `latest`
 * Web: 
-  - `ghcr.io/<owner>/jobmatch-web:v1.0.0-e5f6g7h`
+  - `ghcr.io/<owner>/jobmatch-web:v1.0.0-gitsha`
   - `ghcr.io/<owner>/jobmatch-web:latest`
 * API: 
-  - `ghcr.io/<owner>/jobmatch-api:v1.0.0-e5f6g7h`
+  - `ghcr.io/<owner>/jobmatch-api:v1.0.0-gitsha`
   - `ghcr.io/<owner>/jobmatch-api:latest`
 
 ---
