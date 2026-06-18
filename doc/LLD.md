@@ -341,9 +341,10 @@ spec:
 
 In high-reliability deployments, relying on a single upstream API provider introduces failure points (due to rate limits, service outages, or temporary DNS resolution issues). The JobMatch AI client layers handle fallback transitions automatically:
 
-1. **Gateway Failover Routing (Envoy Active Failover):**
-   - The `AgentgatewayBackend` objects (`llm-for-simple-task` and `llm-for-complex-task`) list primary and secondary backup endpoints in order of priority.
-   - When the Envoy gateway proxy encounters high latency (> 3000ms), DNS failures, or HTTP status codes `503 Service Unavailable`, `504 Gateway Timeout`, or `429 Too Many Requests` from the primary provider (e.g. Claude / Anthropic API), it automatically shifts active routing to the backup provider (e.g. Gemini / Google API) within the same task group backend pool.
+1. **Gateway Failover Routing (Envoy Active Failover - Proposed for Future Implementation):**
+   - *Planned Design:* The `AgentgatewayBackend` objects (`llm-for-simple-task` and `llm-for-complex-task`) will list primary and secondary backup endpoints in order of priority to enable automated gateway-level failover.
+   - *Current Limitation:* The current version of the Envoy-based Agent Gateway (v2.2.1) does not natively support dynamic, multi-provider active failover routing (e.g., automatically shifting traffic from Anthropic to Gemini on gateway-level `429` or `5xx` errors). Implementing this requires a major upstream version upgrade of the gateway platform.
+   - *Interim Setup:* In the current phase, provider failovers are handled at the application tier inside the `AIClient` and service layers.
 
 2. **Application Backend Exception Fallbacks:**
    - If the Envoy proxy returns an error envelope (e.g., standard JSON error structures showing proxy timeouts), the backend `AIClient` catches the exception inside the execution context.

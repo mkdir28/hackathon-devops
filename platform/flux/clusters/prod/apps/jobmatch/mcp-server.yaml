@@ -1,0 +1,10 @@
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: jobmatch-mcp-server
+  namespace: kagent
+spec:
+  description: "JobMatch MCP Server for Qdrant and Resume Matcher"
+  protocol: STREAMABLE_HTTP
+  url: "http://api.jobmatch-prod.svc.cluster.local:3001/mcp"
+  timeout: "30s"

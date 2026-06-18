@@ -1,0 +1,47 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: jobmatch-prod
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "61.x"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: jobmatch-prod
+  values:
+    grafana:
+      enabled: true
+      persistence:
+        enabled: true
+        type: pvc
+        accessModes:
+          - ReadWriteOnce
+        size: 2Gi
+      service:
+        type: ClusterIP
+      sidecar:
+        datasources:
+          enabled: true
+          defaultDatasourceScrapeFromSidecar: false 
+
+      additionalDataSources:
+        - name: Loki
+          type: loki
+          access: proxy
+          url: http://loki-stack.jobmatch-prod.svc.cluster.local:3100
+          jsonData:
+            maxLines: 1000
+          isDefault: false
+
+    prometheus:
+      enabled: true
+      prometheusSpec:
+        podMonitorSelectorNilUsesHelmValues: false
+        podMonitorNamespaceSelector: {}
+      service:
+        type: ClusterIP

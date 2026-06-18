@@ -177,6 +177,7 @@ Single-provider dependency introduces vendor lock-in and reliability risks. Diff
    - **Simple Tasks** (basic matching, parsing, query suggestions): Routed to **gemini-2.5-flash-lite** (primary) or **gpt-5.4-nano** (alternative/backup).
    - **Complex Tasks** (deep analysis, cover letter synthesis): Routed to **claude-haiku-4-5** (primary) or **gemini-3.5-flash** (alternative/backup).
    - Cache results in Redis/Vector cache.
+3. **LLM Gateway Fallback (Proposed for Future Implementation):** Automatic multi-provider failover at the gateway level is planned but deferred. The current version of Agent Gateway does not support dynamic provider fallback routing (e.g., automatically shifting traffic from Anthropic to Gemini on gateway-level `429` or `5xx` errors), which requires a major upstream upgrade to the gateway platform. In the interim, provider failovers are handled at the application tier (`AIClient` code).
 
 ### Justification of Model Choices:
 * **For Simple Models:**
