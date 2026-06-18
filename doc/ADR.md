@@ -161,7 +161,7 @@ The system accepts untrusted external CVs and parses web vacancies. Both can con
    - XML tagging separators (e.g., `<cv_context>...</cv_context>`) to separate instructions from data.
    - Strict allow-list of tools accessible by the agent.
 3. **Secrets Management:** No API keys are kept in git or image layers. Keys are managed on the gateway level (**AgentGateway**) using K8s Secrets in the `agentgateway-system` namespace.
-4. **Supply Chain Security:** Pinned docker image digests (`node:20-alpine@sha256:...`) and SBOM generation.
+4. **Supply Chain Security (Proposed for Future Implementation):** Pinning Docker base image digests (`node:20-alpine@sha256:...`) and automated SBOM generation. Although valuable for securing the container supply chain and preventing base image tampering, direct implementation is deferred to Phase 2 to prevent pipeline build locks on tag updates and avoid overhead during early prototype iterations. Standard image tagging versioning (`v<version>-<sha>`) is used in the interim.
 5. **Output Guardrails:** Configured filters in **AgentGateway** (response policies) to reject (`Reject`) outputs containing prompt leaks or discrimination markers (e.g., age, gender). Safety tests are integrated into the **Evals** loop (`safetyScore`). For advanced moderation, a webhook-based toxicity classifier is proposed for future implementation (e.g. Llama Guard, Perspective API, or a local service running `detoxify`).
 
 ---
