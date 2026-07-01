@@ -21,3 +21,4 @@
 | Global / Remote | LinkedIn, Remote OK, Wellfound, Himalayas |
 
 Full list is loaded at runtime from JSON; the agent injects the country-specific subset into the LLM ranking prompt.
+...smth....
